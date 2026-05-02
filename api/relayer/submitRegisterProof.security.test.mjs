@@ -139,6 +139,7 @@ await consumesSessionAfterPhotoBytesValidationFailureBeforeSolana();
 await rejectsAppCaptureWithMismatchedCapturedFileBytesBeforeSolana();
 await acceptsLevel3KeystoreEvidenceBeforeSolana();
 await acceptsLevel3NativeCanonicalKeystoreEvidenceBeforeSolana();
+await acceptsLevel3WithAndroidPendingLevel4MaterialBeforeSolana();
 await acceptsLevel4HardwareAttestationEvidenceBeforeSolana();
 await rejectsLevel4WithoutTrustedRootBeforeSolana();
 await rejectsLevel4UntrustedRootBeforeSolana();
@@ -957,6 +958,23 @@ async function acceptsLevel4HardwareAttestationEvidenceBeforeSolana() {
   });
 }
 
+async function acceptsLevel3WithAndroidPendingLevel4MaterialBeforeSolana() {
+  clearCaptureSessions();
+  const level3Proof = rewriteProofAndroidEvidence(proof, {
+    hardwareAttestation: "level4",
+    level: 3,
+    pendingRelayerRootValidation: true,
+  });
+  authorizeProofSession(level3Proof);
+
+  await withoutSolanaRpc(async () => {
+    await assert.rejects(
+      () => submitRegisterProof(buildRequest(level3Proof)),
+      /SOLANA_RPC_URL or ANCHOR_PROVIDER_URL is required/,
+    );
+  });
+}
+
 async function rejectsLevel4WithoutTrustedRootBeforeSolana() {
   clearCaptureSessions();
   const previousTrustedRoots = process.env.ARGUS_ANDROID_ATTESTATION_ROOT_SHA256;
@@ -1567,6 +1585,7 @@ function rewriteProofAndroidEvidence(proofBundle, {
   certificateChainPem,
   hardwareAttestation,
   level,
+  pendingRelayerRootValidation = false,
 }) {
   if (hardwareAttestation === "level4" && attestationChallengeHex === undefined) {
     proofBundle = rewriteProofNonce(proofBundle, LEVEL4_ATTESTATION_CHALLENGE_HEX);
@@ -1590,6 +1609,15 @@ function rewriteProofAndroidEvidence(proofBundle, {
       certificateChainPem,
       attestationChallengeHex,
     );
+    if (pendingRelayerRootValidation) {
+      deviceIntegrity.hardwareAttestation = {
+        ...deviceIntegrity.hardwareAttestation,
+        fallbackLevel: 3,
+        reason: "attestation_root_validation_required",
+        rootValidated: false,
+        supported: false,
+      };
+    }
   } else if (hardwareAttestation) {
     deviceIntegrity.hardwareAttestation = hardwareAttestation;
   } else {

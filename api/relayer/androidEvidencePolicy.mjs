@@ -172,8 +172,7 @@ function validateHardwareAttestation(hardwareAttestation, keystoreSignature, req
   }
 
   if (
-    hardwareAttestation.supported !== true ||
-    hardwareAttestation.hardwareBacked !== true ||
+    !hasRelayerVerifiableHardwareAttestationMaterial(hardwareAttestation) ||
     hardwareAttestation.attestationChallengeHex !== request.sessionNonce ||
     hardwareAttestation.publicKeyPem !== keystoreSignature.publicKeyPem ||
     !Array.isArray(hardwareAttestation.certificateChainPem) ||
@@ -188,6 +187,20 @@ function validateHardwareAttestation(hardwareAttestation, keystoreSignature, req
     keystoreSignature.publicKeyPem,
     request.sessionNonce,
   );
+}
+
+function hasRelayerVerifiableHardwareAttestationMaterial(hardwareAttestation) {
+  const locallySupported =
+    hardwareAttestation.supported === true &&
+    hardwareAttestation.hardwareBacked === true;
+  const pendingRelayerRootValidation =
+    hardwareAttestation.supported === false &&
+    hardwareAttestation.hardwareBacked === true &&
+    hardwareAttestation.rootValidated === false &&
+    hardwareAttestation.fallbackLevel === 3 &&
+    hardwareAttestation.reason === "attestation_root_validation_required";
+
+  return locallySupported || pendingRelayerRootValidation;
 }
 
 function validatePendingLevel4AttestationMaterial({ deviceIntegrity, keystoreSignature, request }) {
@@ -227,7 +240,7 @@ function hasPendingLevel4AttestationMaterial(deviceIntegrity) {
       (hardwareAttestation &&
         typeof hardwareAttestation === "object" &&
         !Array.isArray(hardwareAttestation) &&
-        hardwareAttestation.supported === true),
+        hasRelayerVerifiableHardwareAttestationMaterial(hardwareAttestation)),
   );
 }
 

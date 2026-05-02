@@ -41,6 +41,9 @@ export async function registerProof(request) {
       proofId: shortValue(normalizedRequest.proofId),
       acceptedLevel: androidEvidenceDecision.level4AttestationVerdict.acceptedLevel,
       evidenceLevel: androidEvidenceDecision.level4AttestationVerdict.evidenceLevel,
+      failureReason: androidEvidenceDecision.level4AttestationVerdict.failureReason,
+      trustedAttestationRootConfigured:
+        androidEvidenceDecision.level4AttestationVerdict.trustedAttestationRootConfigured === true,
       trustedAttestationRootValidated:
         androidEvidenceDecision.level4AttestationVerdict.trustedAttestationRootValidated === true,
     });

@@ -179,6 +179,7 @@ await acceptsLevel2HardwareFallbackEvidence();
 await acceptsLevel3KeystoreEvidence();
 await acceptsLevel3NativeCanonicalKeystoreEvidence();
 await acceptsLevel3WithPendingLevel4MaterialAfterRelayerRootValidation();
+await acceptsLevel3WithAndroidPendingLevel4MaterialAfterRelayerRootValidation();
 await acceptsLevel3WithPendingLevel4MaterialWithoutTrustedRootAsLevel3();
 await acceptsLevel3HardwareFallbackEvidence();
 await rejectsLevel3KeystoreSignatureMismatch();
@@ -1795,6 +1796,24 @@ async function acceptsLevel3WithPendingLevel4MaterialAfterRelayerRootValidation(
   );
 }
 
+async function acceptsLevel3WithAndroidPendingLevel4MaterialAfterRelayerRootValidation() {
+  clearCaptureSessions();
+  const level3Proof = rewriteProofAndroidEvidence(proof, {
+    hardwareAttestation: "level4",
+    level: 3,
+    pendingRelayerRootValidation: true,
+  });
+  authorizeProofSession(level3Proof);
+
+  const result = await registerProof(buildRequest(level3Proof));
+
+  assert.equal(result.proofId, level3Proof.proofId);
+  assert.equal(result.deviceEvidenceSummary.evidenceLevel, "level_4_hardware_attestation");
+  assert.equal(result.deviceEvidenceSummary.level4HardwareAttestation, true);
+  assert.equal(result.deviceEvidenceSummary.relayerAcceptedAndroidEvidenceLevel, 4);
+  assert.equal(result.deviceEvidenceSummary.trustedAttestationRootValidated, true);
+}
+
 async function acceptsLevel3WithPendingLevel4MaterialWithoutTrustedRootAsLevel3() {
   clearCaptureSessions();
   const previousTrustedRoots = process.env.ARGUS_ANDROID_ATTESTATION_ROOT_SHA256;
@@ -2469,6 +2488,7 @@ function rewriteProofAndroidEvidence(proofBundle, {
   certificateChainPem,
   hardwareAttestation,
   level,
+  pendingRelayerRootValidation = false,
   tamperSignature = false,
 }) {
   if (hardwareAttestation === "level4" && attestationChallengeHex === undefined) {
@@ -2493,6 +2513,15 @@ function rewriteProofAndroidEvidence(proofBundle, {
       certificateChainPem,
       attestationChallengeHex,
     );
+    if (pendingRelayerRootValidation) {
+      deviceIntegrity.hardwareAttestation = {
+        ...deviceIntegrity.hardwareAttestation,
+        fallbackLevel: 3,
+        reason: "attestation_root_validation_required",
+        rootValidated: false,
+        supported: false,
+      };
+    }
   } else if (hardwareAttestation) {
     deviceIntegrity.hardwareAttestation = hardwareAttestation;
   } else {
