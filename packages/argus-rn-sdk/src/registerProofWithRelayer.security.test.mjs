@@ -33,6 +33,7 @@ const originalFetch = globalThis.fetch;
 
 try {
   await acceptsActiveAuthorizedAppCaptureRegistration();
+  await acceptsPendingLevel4MaterialForRelayerValidation();
   await rejectsRelayerSelfAttestation();
   await rejectsUnsponsoredProductionRegistration();
   await rejectsMismatchedFeePayerProductionRegistration();
@@ -192,6 +193,66 @@ async function acceptsActiveAuthorizedAppCaptureRegistration() {
   assert.equal(registration.proofRecord?.relayerAuthorized, true);
   assert.equal(registration.proofRecord?.status, "active");
   assert.equal(isArgusProductionProof({ ...proof, ...registration }), true);
+}
+
+async function acceptsPendingLevel4MaterialForRelayerValidation() {
+  const baseProof = buildProof();
+  const publicKeyPem = "-----BEGIN PUBLIC KEY-----\nargus-test\n-----END PUBLIC KEY-----";
+  const certificatePem = "-----BEGIN CERTIFICATE-----\nargus-test\n-----END CERTIFICATE-----";
+  const deviceIntegrity = {
+    ...JSON.parse(baseProof.deviceIntegrityJson),
+    androidEvidenceLevel: 3,
+    attestationCertificateChainPem: [certificatePem],
+    attestationStatus: "level_4_material_present_pending_relayer_root_validation",
+    evidenceLevel: "level_3_keystore_signature",
+    hardwareAttestation: {
+      attestationChallengeHex: baseProof.nonce,
+      certificateChainPem: [certificatePem],
+      fallbackLevel: 3,
+      hardwareBacked: true,
+      publicKeyPem,
+      reason: "attestation_root_validation_required",
+      rootValidated: false,
+      supported: false,
+    },
+    keystorePublicKeyPem: publicKeyPem,
+    keystoreSignature: {
+      algorithm: "SHA256withECDSA",
+      publicKeyPem,
+      signedPayloadJson: "{\"proofId\":\"argus-test\"}",
+      signatureBase64: "YXJndXMtc2ln",
+    },
+    level3KeystoreSignature: true,
+    level4AttestationMaterial: true,
+    level4HardwareAttestation: false,
+  };
+  const proof = {
+    ...rebindProofEvidence(baseProof, {
+      deviceIntegrityJson: stableStringify(deviceIntegrity),
+    }),
+    deviceEvidenceSummary: {
+      ...baseProof.deviceEvidenceSummary,
+      androidEvidenceLevel: 3,
+      attestationCertificateChainPem: [certificatePem],
+      attestationStatus: "level_4_material_present_pending_relayer_root_validation",
+      evidenceLevel: "level_3_keystore_signature",
+      keystoreAttestationMaterial: true,
+      keystorePublicKeyPem: publicKeyPem,
+      keystoreSignature: true,
+      level3KeystoreSignature: true,
+      level4HardwareAttestation: false,
+    },
+  };
+  mockRelayerResponse(buildRegistration(proof));
+
+  const registration = await registerProofWithRelayer(config, proof);
+
+  assert.equal(registration.proofRecord?.status, "active");
+  assert.equal(getArgusEvidenceLevel(proof), "level_3_keystore_signature");
+  assert.equal(
+    getArgusEvidenceLevelLabel(proof),
+    "Level 3 - hardware attestation material pending relayer validation",
+  );
 }
 
 async function rejectsRelayerSelfAttestation() {
@@ -3058,7 +3119,7 @@ function hidesGenericProofSummaryForMarketplaceSimulatorFallback() {
   ]);
   const renderedText = collectRenderedText(MarketplaceDemoApp({})).join("\n");
 
-  assert.match(renderedText, /Simulator Preview/);
+  assert.match(renderedText, /Argus demo preview/);
   assert.match(renderedText, /Simulator preview/);
   assert.match(renderedText, /Solana record pending/);
   assert.doesNotMatch(renderedText, /Generic SDK proof summary/);
@@ -3070,7 +3131,7 @@ function rendersGenericProofSummaryOutsideMarketplaceSimulatorFallback() {
   const renderedText = collectRenderedText(MarketplaceDemoApp({})).join("\n");
 
   assert.equal(isArgusLocalDemoProof(proof), true);
-  assert.match(renderedText, /Local Demo Preview/);
+  assert.match(renderedText, /Argus demo preview/);
   assert.match(renderedText, /Local preview/);
   assert.doesNotMatch(renderedText, /Generic SDK proof summary/);
 }
@@ -3495,8 +3556,14 @@ function loadMarketplaceDemoAppForTest(initialStateValues = []) {
         loadLocalListingDraft() {
           return null;
         },
+        loadLocalListingDrafts() {
+          return [];
+        },
         saveLocalListingDraft(draft) {
           return draft;
+        },
+        saveLocalListingDrafts(drafts) {
+          return drafts;
         },
       };
     }
@@ -3519,15 +3586,47 @@ function normalizeMarketplaceInitialStateValues(initialStateValues) {
 
   const fallbackMessage = typeof initialStateValues[1] === "string" ? initialStateValues[1] : null;
   const isSimulatorFallback = initialStateValues[2] === true;
+  const backendStatus = isSimulatorFallback || isArgusLocalDemoProof(firstValue) ? "local_only" : "registered";
+  const draft = {
+    backendMessage:
+      fallbackMessage ?? (backendStatus === "local_only" ? "Local preview only" : "Solana devnet registered"),
+    backendStatus,
+    listing: {
+      condition: "Used",
+      id: "argus-listing-test",
+      offerLabel: "Buy It Now or Best Offer",
+      photoUrl: "https://demo.argus.example/item.jpg",
+      price: "$1",
+      seller: {
+        location: "Austin, TX",
+        name: "TestSeller",
+        positiveRate: "99%",
+        score: "10 sales",
+      },
+      shipping: "Free shipping",
+      title: "Test listing",
+    },
+    metadataJson: firstValue.metadataJson ?? "{}",
+    photoBytesBase64: firstValue.photoBytesBase64 ?? "",
+    photoUri: "https://demo.argus.example/item.jpg",
+    proof: firstValue,
+    savedAt: "2026-05-02T00:00:00.000Z",
+    uploadSource: isSimulatorFallback ? "local_upload" : "argus_camera",
+  };
 
   return [
-    null,
-    firstValue,
+    [draft],
+    draft.listing.id,
     "selling",
+    "argus-listing-test",
+    {
+      condition: "",
+      location: "",
+      price: "",
+      title: "",
+    },
     fallbackMessage,
-    isSimulatorFallback ? "local_only" : "registered",
-    false,
-    isSimulatorFallback,
+    null,
   ];
 }
 

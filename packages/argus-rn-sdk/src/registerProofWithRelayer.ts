@@ -1,6 +1,7 @@
 import {
   ARGUS_AUTHORIZED_RELAYER,
   ARGUS_REGISTRY_PROGRAM_ID,
+  getProductionCaptureFieldDiagnostics,
   hasRequiredProductionCaptureFields,
   isPlausibleProofRecordRegisteredAt,
   isPlausibleSolanaTransactionSignature,
@@ -36,12 +37,9 @@ export async function registerProofWithRelayer(
 
   assertProofAllowedForProductionRegistration(proofSnapshot);
 
-  const response = await fetch(registerProofUrl, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
+  const response = await postRegistrationWithRetry(
+    registerProofUrl,
+    JSON.stringify({
       proofId: proofSnapshot.proofId,
       manifestHash: proofSnapshot.manifestHash,
       imageHash: proofSnapshot.imageHash,
@@ -59,7 +57,7 @@ export async function registerProofWithRelayer(
       appIdentityHash: proofSnapshot.appIdentityHash,
       proofLevel: proofSnapshot.proofLevel ?? proofSnapshot.integrityLevel,
     }),
-  });
+  );
 
   if (!response.ok) {
     throw new Error(`Argus relayer returned ${response.status}`);
@@ -68,6 +66,43 @@ export async function registerProofWithRelayer(
   const registration = (await response.json()) as RelayerRegistrationResult;
   assertRegistrationMatchesProof(config, registration, proofSnapshot);
   return registration;
+}
+
+async function postRegistrationWithRetry(registerProofUrl: string, body: string): Promise<Response> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(registerProofUrl, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body,
+      });
+
+      if (response.ok || response.status < 500 || attempt === 1) {
+        return response;
+      }
+
+      console.warn("[Argus SDK] relayer registration returned retryable status", {
+        attempt: attempt + 1,
+        status: response.status,
+      });
+    } catch (error) {
+      lastError = error;
+      if (attempt === 1) {
+        throw error;
+      }
+
+      console.warn("[Argus SDK] relayer registration request failed; retrying once", {
+        attempt: attempt + 1,
+        message: error instanceof Error ? error.message : "unknown fetch error",
+      });
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Argus relayer registration failed");
 }
 
 function snapshotProofForRegistration(proof: ArgusProof): ArgusProof {
@@ -168,10 +203,89 @@ function assertProofAllowedForProductionRegistration(proof: ArgusProof) {
   }
 
   if (!hasRequiredProductionCaptureFields(proof)) {
+    console.warn(
+      "[Argus SDK] production proof validation failed",
+      buildProductionCaptureDiagnostics(proof),
+    );
     throw new Error("Argus native proof is missing required app_capture evidence or session fields");
   }
 
   return proofLevel;
+}
+
+function buildProductionCaptureDiagnostics(proof: ArgusProof) {
+  const summary = proof.deviceEvidenceSummary;
+  return {
+    proofLevel: proof.proofLevel ?? proof.integrityLevel,
+    ids: {
+      proofId: debugHash(proof.proofId),
+      manifestHash: debugHash(proof.manifestHash),
+      imageHash: debugHash(proof.imageHash),
+      partnerIdHash: debugHash(proof.partnerIdHash),
+    },
+    requiredTopLevelFields: {
+      canonicalManifestJson: hasText(proof.canonicalManifestJson),
+      metadataJson: hasText(proof.metadataJson),
+      cameraEvidenceJson: hasText(proof.cameraEvidenceJson),
+      deviceIntegrityJson: hasText(proof.deviceIntegrityJson),
+      photoBytesBase64: hasText(proof.photoBytesBase64),
+      captureSessionId: hasText(proof.captureSessionId),
+      nonce: debugHash(proof.nonce),
+      appIdentityHash: debugHash(proof.appIdentityHash),
+    },
+    fieldSizes: {
+      canonicalManifestJsonBytes: utf8ByteLength(proof.canonicalManifestJson),
+      metadataJsonBytes: utf8ByteLength(proof.metadataJson),
+      cameraEvidenceJsonBytes: utf8ByteLength(proof.cameraEvidenceJson),
+      deviceIntegrityJsonBytes: utf8ByteLength(proof.deviceIntegrityJson),
+      photoBytesBase64Length: proof.photoBytesBase64?.length ?? 0,
+    },
+    deviceEvidenceSummary: {
+      cameraMetadata: summary?.cameraMetadata,
+      motionSnapshot: summary?.motionSnapshot,
+      appIdentityHash: summary?.appIdentityHash,
+      keystoreSignature: summary?.keystoreSignature,
+      keystoreAttestationMaterial: summary?.keystoreAttestationMaterial,
+      evidenceLevel: summary?.evidenceLevel,
+      level3KeystoreSignature: summary?.level3KeystoreSignature,
+      level4HardwareAttestation: summary?.level4HardwareAttestation,
+      androidEvidenceLevel: summary?.androidEvidenceLevel,
+      attestationStatus: summary?.attestationStatus,
+    },
+    productionCaptureChecks: getProductionCaptureFieldDiagnostics(proof),
+  };
+}
+
+function debugHash(value?: string): string | false {
+  if (!hasText(value)) {
+    return false;
+  }
+
+  return value.length <= 18 ? value : `${value.slice(0, 8)}...${value.slice(-6)}`;
+}
+
+function utf8ByteLength(value?: string): number {
+  if (!value) {
+    return 0;
+  }
+
+  let bytes = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const codePoint = value.codePointAt(index) ?? 0;
+    if (codePoint > 0xffff) {
+      index += 1;
+    }
+    if (codePoint <= 0x7f) {
+      bytes += 1;
+    } else if (codePoint <= 0x7ff) {
+      bytes += 2;
+    } else if (codePoint <= 0xffff) {
+      bytes += 3;
+    } else {
+      bytes += 4;
+    }
+  }
+  return bytes;
 }
 
 function isProductionRelayerAcceptance(registration: RelayerRegistrationResult): boolean {

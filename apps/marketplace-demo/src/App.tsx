@@ -2,7 +2,9 @@ import React, { useEffect, useState } from "react";
 import {
   Alert,
   Image,
+  KeyboardAvoidingView,
   Linking,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -158,6 +160,10 @@ export default function MarketplaceDemoApp() {
   }, []);
 
   function handleNativeError(error: Error) {
+    console.warn("[Marketplace demo] Argus camera error", {
+      message: error.message,
+      stack: error.stack,
+    });
     setCaptureError(`SDK camera failed: ${error.message}`);
   }
 
@@ -165,6 +171,29 @@ export default function MarketplaceDemoApp() {
     const listingForProof = createListingFromCurrentForm();
     setCaptureError(null);
     resetListingForm();
+    if (createdProof.proofRecord) {
+      const isRegistered = isArgusProductionProof(createdProof);
+      persistDraft(createdProof, {
+        backendMessage: isRegistered
+          ? "Solana devnet registered"
+          : "Registration pending: relayer validation did not produce an active Solana record",
+        backendStatus: isRegistered ? "registered" : "local_only",
+        listing: listingForProof,
+        uploadSource: "argus_camera",
+      });
+      return;
+    }
+
+    if (hasPendingHardwareAttestationMaterial(createdProof)) {
+      persistDraft(createdProof, {
+        backendMessage: "Level 4 material pending relayer validation",
+        backendStatus: "local_only",
+        listing: listingForProof,
+        uploadSource: "argus_camera",
+      });
+      return;
+    }
+
     void persistAndRegisterProof(createdProof, listingForProof);
   }
 
@@ -244,8 +273,16 @@ export default function MarketplaceDemoApp() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.appShell}>
-        <ScrollView contentContainerStyle={styles.screen} style={styles.scrollView}>
+      <KeyboardAvoidingView
+        behavior={Platform?.OS === "ios" ? "padding" : "height"}
+        style={styles.appShell}
+      >
+        <ScrollView
+          contentContainerStyle={styles.screen}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          style={styles.scrollView}
+        >
           <View style={styles.topBar}>
             <EbayWordmark />
             <View style={styles.topIconButton}>
@@ -278,16 +315,6 @@ export default function MarketplaceDemoApp() {
               <View style={styles.sellingHero}>
                 <Text style={styles.eyebrow}>Selling</Text>
                 <Text style={styles.sellingHeroTitle}>List an item</Text>
-                <View style={styles.flowSteps}>
-                  <FlowStep index="1" title="Details" copy={canCreateListing ? "Ready" : "Title and price"} active />
-                  <FlowStep index="2" title="Capture" copy={proof ? "Photo saved" : "Use Argus SDK"} active={Boolean(proof)} />
-                  <FlowStep
-                    index="3"
-                    title="Verify"
-                    copy={statusCopy(backendStatus, isRegistering)}
-                    active={backendStatus === "registering" || backendStatus === "registered"}
-                  />
-                </View>
               </View>
 
               <View style={styles.panel}>
@@ -455,7 +482,7 @@ export default function MarketplaceDemoApp() {
             </Pressable>
           ))}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -679,26 +706,6 @@ function PlaceholderTab({ label }: { label: string }) {
   );
 }
 
-function FlowStep({
-  active,
-  copy,
-  index,
-  title,
-}: {
-  active?: boolean;
-  copy: string;
-  index: string;
-  title: string;
-}) {
-  return (
-    <View style={active ? styles.flowStepActive : styles.flowStep}>
-      <Text style={styles.flowStepIndex}>{index}</Text>
-      <Text style={styles.flowStepTitle}>{title}</Text>
-      <Text style={styles.flowStepCopy}>{copy}</Text>
-    </View>
-  );
-}
-
 function ListingPreview({ draft, isRegistering }: { draft: LocalListingDraft; isRegistering: boolean }) {
   return (
     <View style={styles.panel}>
@@ -913,6 +920,26 @@ function statusCopy(status: ListingBackendStatus, isRegistering: boolean): strin
   return "Verifier pending";
 }
 
+function hasPendingHardwareAttestationMaterial(proof: ArgusProof): boolean {
+  const summary = proof.deviceEvidenceSummary;
+  if (
+    summary?.attestationStatus === "level_4_material_present_pending_relayer_root_validation" ||
+    summary?.keystoreAttestationMaterial === true
+  ) {
+    return true;
+  }
+
+  try {
+    const deviceIntegrity = JSON.parse(proof.deviceIntegrityJson ?? "") as Record<string, unknown>;
+    return (
+      deviceIntegrity.attestationStatus === "level_4_material_present_pending_relayer_root_validation" ||
+      deviceIntegrity.level4AttestationMaterial === true
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function shortenHash(value?: string) {
   if (!value) {
     return "Unavailable";
@@ -1102,39 +1129,6 @@ const styles = StyleSheet.create({
     color: "#111827",
     fontSize: 30,
     fontWeight: "800",
-  },
-  flowSteps: {
-    gap: 8,
-  },
-  flowStep: {
-    backgroundColor: "#ffffff",
-    borderColor: "#d6dbe2",
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: 3,
-    padding: 10,
-  },
-  flowStepActive: {
-    backgroundColor: "#ffffff",
-    borderColor: "#3665f3",
-    borderRadius: 8,
-    borderWidth: 2,
-    gap: 3,
-    padding: 10,
-  },
-  flowStepIndex: {
-    color: "#3665f3",
-    fontSize: 12,
-    fontWeight: "800",
-  },
-  flowStepTitle: {
-    color: "#111827",
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  flowStepCopy: {
-    color: "#5f6875",
-    fontSize: 12,
   },
   photoStage: {
     aspectRatio: 1,

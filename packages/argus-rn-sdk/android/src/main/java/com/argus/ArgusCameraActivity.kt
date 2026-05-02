@@ -17,6 +17,8 @@ import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.ComponentActivity
@@ -39,9 +41,9 @@ class ArgusCameraActivity : ComponentActivity() {
 
     private lateinit var previewView: PreviewView
     private lateinit var captureButton: ShutterButton
-    private lateinit var flashButton: TextView
-    private lateinit var gridButton: TextView
-    private lateinit var flipButton: TextView
+    private lateinit var flashButton: ImageButton
+    private lateinit var gridButton: ImageButton
+    private lateinit var flipButton: ImageButton
     private lateinit var gridOverlay: GridOverlayView
     private lateinit var focusOverlay: FocusOverlayView
     private lateinit var zoomButtons: List<TextView>
@@ -170,10 +172,10 @@ class ArgusCameraActivity : ComponentActivity() {
             gravity = Gravity.CENTER_VERTICAL
             orientation = LinearLayout.HORIZONTAL
         }
-        flashButton = topControlButton("⚡/", "Flash off").apply {
+        flashButton = iconButton(R.drawable.argus_ic_flash_off, "Flash off").apply {
             setOnClickListener { cycleFlashMode() }
         }
-        gridButton = topControlButton("▦", "Grid on").apply {
+        gridButton = iconButton(R.drawable.argus_ic_grid_3x3, "Grid on").apply {
             setOnClickListener {
                 gridOverlay.isGridEnabled = !gridOverlay.isGridEnabled
                 updateGridButton()
@@ -192,8 +194,7 @@ class ArgusCameraActivity : ComponentActivity() {
             setTextColor(ACCENT_COLOR)
             letterSpacing = 0.08f
         }
-        val closeButton = topControlButton("×", "Cancel capture").apply {
-            textSize = 26f
+        val closeButton = iconButton(R.drawable.argus_ic_close, "Cancel capture").apply {
             setOnClickListener {
                 setResult(RESULT_CANCELED)
                 finish()
@@ -210,7 +211,7 @@ class ArgusCameraActivity : ComponentActivity() {
             dp(40),
             Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM,
         ))
-        controls.addView(closeButton, FrameLayout.LayoutParams(dp(40), dp(40), Gravity.END or Gravity.BOTTOM))
+        controls.addView(closeButton, FrameLayout.LayoutParams(dp(36), dp(36), Gravity.END or Gravity.BOTTOM))
         updateFlashButton()
         updateGridButton()
         return controls
@@ -241,13 +242,9 @@ class ArgusCameraActivity : ComponentActivity() {
             zoomStrip.addView(button, LinearLayout.LayoutParams(dp(38), dp(38)))
         }
 
-        flipButton = TextView(this).apply {
-            gravity = Gravity.CENTER
-            text = "↻"
-            textSize = 30f
-            setTextColor(Color.WHITE)
+        flipButton = iconButton(R.drawable.argus_ic_cameraswitch, "Switch camera").apply {
             background = circleBackground(0x66000000)
-            contentDescription = "Switch camera"
+            setPadding(dp(11), dp(11), dp(11), dp(11))
             setOnClickListener { switchCamera() }
         }
         val modeLabel = TextView(this).apply {
@@ -419,15 +416,35 @@ class ArgusCameraActivity : ComponentActivity() {
     }
 
     private fun updateFlashButton() {
-        flashButton.text = when (flashMode) {
-            ImageCapture.FLASH_MODE_AUTO -> "⚡A"
-            ImageCapture.FLASH_MODE_ON -> "⚡"
-            else -> "⚡/"
+        when (flashMode) {
+            ImageCapture.FLASH_MODE_AUTO -> {
+                flashButton.setImageResource(R.drawable.argus_ic_flash_auto)
+                flashButton.setColorFilter(ACCENT_COLOR)
+                flashButton.contentDescription = "Flash auto"
+            }
+            ImageCapture.FLASH_MODE_ON -> {
+                flashButton.setImageResource(R.drawable.argus_ic_flash_on)
+                flashButton.setColorFilter(ACCENT_COLOR)
+                flashButton.contentDescription = "Flash on"
+            }
+            else -> {
+                flashButton.setImageResource(R.drawable.argus_ic_flash_off)
+                flashButton.setColorFilter(Color.WHITE)
+                flashButton.contentDescription = "Flash off"
+            }
         }
     }
 
     private fun updateGridButton() {
-        gridButton.text = if (gridOverlay.isGridEnabled) "▦" else "□"
+        if (gridOverlay.isGridEnabled) {
+            gridButton.setImageResource(R.drawable.argus_ic_grid_3x3)
+            gridButton.setColorFilter(Color.WHITE)
+            gridButton.contentDescription = "Grid on"
+        } else {
+            gridButton.setImageResource(R.drawable.argus_ic_grid_off)
+            gridButton.setColorFilter(0x99FFFFFF.toInt())
+            gridButton.contentDescription = "Grid off"
+        }
     }
 
     private fun updateFlipButton(provider: ProcessCameraProvider) {
@@ -561,15 +578,14 @@ class ArgusCameraActivity : ComponentActivity() {
         )
     }
 
-    private fun topControlButton(value: String, description: String): TextView {
-        return TextView(this).apply {
-            gravity = Gravity.CENTER
-            text = value
-            contentDescription = description
-            textSize = 20f
-            setTextColor(Color.WHITE)
-            typeface = Typeface.DEFAULT_BOLD
+    private fun iconButton(iconResId: Int, description: String): ImageButton {
+        return ImageButton(this).apply {
             background = circleBackground(0x44FFFFFF)
+            contentDescription = description
+            scaleType = ImageView.ScaleType.CENTER
+            setColorFilter(Color.WHITE)
+            setImageResource(iconResId)
+            setPadding(dp(8), dp(8), dp(8), dp(8))
         }
     }
 
@@ -738,8 +754,9 @@ private class ShutterButton(context: Context) : View(context) {
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val radius = width.coerceAtMost(height) / 2f - 6f * resources.displayMetrics.density
+        val density = resources.displayMetrics.density
+        val radius = width.coerceAtMost(height) / 2f - 10f * density
         canvas.drawCircle(width / 2f, height / 2f, radius, whitePaint)
-        canvas.drawCircle(width / 2f, height / 2f, radius + 5f * resources.displayMetrics.density, strokePaint)
+        canvas.drawCircle(width / 2f, height / 2f, radius + 5f * density, strokePaint)
     }
 }

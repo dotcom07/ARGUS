@@ -16,6 +16,8 @@ const MAX_CAMERA_EVIDENCE_DELAY_MS = 5_000;
 const MAX_MOTION_CAPTURE_DELTA_MS = 2_000;
 const ARGUS_EVIDENCE_LEVEL_2 = "level_2_native_capture";
 const ARGUS_LEVEL_4_FALLBACK_TO_LEVEL_2 = "level_4_unsupported_fell_back_to_level_2";
+const ARGUS_LEVEL_4_MATERIAL_PENDING_RELAY_VALIDATION =
+  "level_4_material_present_pending_relayer_root_validation";
 const ARGUS_LEVEL_4_TRUSTED_ROOT_VALIDATED = "level_4_trusted_root_validated";
 const ARGUS_KEYSTORE_SIGNATURE_ALGORITHMS = new Set(["SHA256withECDSA", "SHA256withRSA"]);
 
@@ -78,6 +80,13 @@ export function getArgusEvidenceLevelLabel(proof?: ArgusProof | null): string | 
     typeof deviceIntegrity?.evidenceLevel === "string" ? deviceIntegrity.evidenceLevel : undefined;
   const claimedLevel = committedLevel ?? proof?.deviceEvidenceSummary?.evidenceLevel;
   if (
+    evidenceLevel === "level_3_keystore_signature" &&
+    hasPendingLevel4MaterialRelayerValidation(deviceIntegrity, proof)
+  ) {
+    return "Level 3 - hardware attestation material pending relayer validation";
+  }
+
+  if (
     claimedLevel === "level_4_hardware_attestation" &&
     evidenceLevel !== "level_4_hardware_attestation"
   ) {
@@ -92,6 +101,18 @@ export function getArgusEvidenceLevelLabel(proof?: ArgusProof | null): string | 
   }
 
   return baseLabel;
+}
+
+function hasPendingLevel4MaterialRelayerValidation(
+  deviceIntegrity: Record<string, unknown> | null,
+  proof?: ArgusProof | null,
+): boolean {
+  return Boolean(
+    deviceIntegrity?.attestationStatus === ARGUS_LEVEL_4_MATERIAL_PENDING_RELAY_VALIDATION ||
+      deviceIntegrity?.level4AttestationMaterial === true ||
+      proof?.deviceEvidenceSummary?.attestationStatus === ARGUS_LEVEL_4_MATERIAL_PENDING_RELAY_VALIDATION ||
+      proof?.deviceEvidenceSummary?.keystoreAttestationMaterial === true,
+  );
 }
 
 export function hasArgusKeystorePublicKeyEvidence(proof?: ArgusProof | null): boolean {
@@ -209,6 +230,150 @@ export function hasRequiredProductionCaptureFields(proof?: ArgusProof | null): b
     proof.deviceEvidenceSummary?.appIdentityHash === true &&
     androidEvidencePolicyMatches(parseObjectJson(proof.deviceIntegrityJson, MAX_EVIDENCE_JSON_BYTES))
   );
+}
+
+export function getProductionCaptureFieldDiagnostics(proof?: ArgusProof | null) {
+  const proofLevel = getArgusProofLevel(proof);
+  const supportedProofLevel = isSupportedProductionProofLevel(proofLevel) ? proofLevel : undefined;
+  const manifest = parseObjectJson(proof?.canonicalManifestJson, MAX_CANONICAL_MANIFEST_JSON_BYTES);
+  const cameraEvidence = parseObjectJson(proof?.cameraEvidenceJson, MAX_EVIDENCE_JSON_BYTES);
+  const deviceIntegrity = parseObjectJson(proof?.deviceIntegrityJson, MAX_EVIDENCE_JSON_BYTES);
+  const photoBytes = base64ToBytes(proof?.photoBytesBase64);
+  const capturedAtMs = manifest?.captured_at_ms;
+  const hardwareAttestation = asRecord(deviceIntegrity?.hardwareAttestation);
+  const keystoreSignature = asRecord(deviceIntegrity?.keystoreSignature);
+  const motionSnapshot = asRecord(deviceIntegrity?.motionSnapshot);
+  const manifestCaptureTimestamp =
+    typeof capturedAtMs === "number" && Number.isSafeInteger(capturedAtMs) ? capturedAtMs : undefined;
+  const sampledAtMs =
+    typeof motionSnapshot?.sampledAtMs === "number" && Number.isSafeInteger(motionSnapshot.sampledAtMs)
+      ? motionSnapshot.sampledAtMs
+      : undefined;
+  const collectedAtMs =
+    typeof cameraEvidence?.collectedAtMs === "number" && Number.isSafeInteger(cameraEvidence.collectedAtMs)
+      ? cameraEvidence.collectedAtMs
+      : undefined;
+
+  return {
+    parsed: {
+      manifest: Boolean(manifest),
+      cameraEvidence: Boolean(cameraEvidence),
+      deviceIntegrity: Boolean(deviceIntegrity),
+      photoBytes: Boolean(photoBytes),
+    },
+    checks: {
+      supportedProofLevel: Boolean(supportedProofLevel),
+      proofIdsPresent: Boolean(
+        isNonZeroHex32(proof?.proofId) &&
+          isNonZeroHex32(proof?.manifestHash) &&
+          isNonZeroHex32(proof?.imageHash) &&
+          isNonZeroHex32(proof?.partnerIdHash),
+      ),
+      topLevelFieldsPresent: Boolean(
+        hasText(proof?.canonicalManifestJson) &&
+          hasBoundedText(proof?.metadataJson, MAX_METADATA_JSON_BYTES) &&
+          hasBoundedText(proof?.cameraEvidenceJson, MAX_EVIDENCE_JSON_BYTES) &&
+          hasBoundedText(proof?.deviceIntegrityJson, MAX_EVIDENCE_JSON_BYTES) &&
+          hasText(proof?.photoBytesBase64) &&
+          hasText(proof?.captureSessionId) &&
+          isNonZeroHex32(proof?.nonce) &&
+          isNonZeroHex32(proof?.appIdentityHash),
+      ),
+      manifestMatchesProofFields: Boolean(
+        proof && manifest && supportedProofLevel && manifestMatchesProofFields(proof, manifest, supportedProofLevel),
+      ),
+      proofBundleHashesMatch: Boolean(proof && manifest && proofBundleHashesMatch(proof, manifest)),
+      cameraEvidenceMatches: Boolean(
+        proof && productionCameraEvidenceMatches(proof.cameraEvidenceJson, manifest, proof.photoBytesBase64),
+      ),
+      deviceIntegrityMatches: Boolean(
+        proof && productionDeviceIntegrityMatches(proof.deviceIntegrityJson, proof.appIdentityHash, capturedAtMs),
+      ),
+      evidenceJsonPolicy: Boolean(proof && productionEvidenceJsonMatchesRelayerPolicy(proof)),
+      summaryFlags: Boolean(
+        proof?.deviceEvidenceSummary?.cameraMetadata === true &&
+          proof.deviceEvidenceSummary.motionSnapshot === true &&
+          proof.deviceEvidenceSummary.appIdentityHash === true,
+      ),
+      androidEvidencePolicy: androidEvidencePolicyMatches(deviceIntegrity),
+    },
+    jsonPolicy: {
+      metadataCanonical: isCanonicalJson(proof?.metadataJson),
+      cameraEvidenceCanonical: isCanonicalJson(proof?.cameraEvidenceJson),
+      deviceIntegrityCanonical: isCanonicalJson(proof?.deviceIntegrityJson),
+    },
+    photoPolicy: {
+      base64Decoded: Boolean(photoBytes),
+      decodedBytes: photoBytes?.length ?? 0,
+      startsWithJpegSoi: Boolean(photoBytes && byteAt(photoBytes, 0) === 0xff && byteAt(photoBytes, 1) === 0xd8),
+      endsWithJpegEoi: Boolean(
+        photoBytes &&
+          byteAt(photoBytes, photoBytes.length - 2) === 0xff &&
+          byteAt(photoBytes, photoBytes.length - 1) === 0xd9,
+      ),
+      nativeJpegPolicy: Boolean(photoBytes && isNativeJpegPhotoBytes(photoBytes)),
+    },
+    cameraEvidence: {
+      captureSurface: cameraEvidence?.captureSurface,
+      noGalleryImport: cameraEvidence?.noGalleryImport,
+      cameraMetadata: cameraEvidence?.cameraMetadata,
+      capturedFileBytes: cameraEvidence?.capturedFileBytes,
+      photoBytesMatch: photoBytes ? cameraEvidence?.capturedFileBytes === photoBytes.length : false,
+      capturedAtMatchesManifest: cameraEvidence?.capturedAtMs === capturedAtMs,
+      captureEvidenceDelayMs: cameraEvidence?.captureEvidenceDelayMs,
+      calculatedDelayMs:
+        collectedAtMs !== undefined && manifestCaptureTimestamp !== undefined
+          ? collectedAtMs - manifestCaptureTimestamp
+          : undefined,
+    },
+    deviceIntegrity: {
+      appIdentityMatches: deviceIntegrity?.appIdentityHash === proof?.appIdentityHash,
+      appIdentityHashPresent: deviceIntegrity?.appIdentityHashPresent,
+      evidenceLevel: deviceIntegrity?.evidenceLevel,
+      androidEvidenceLevel: deviceIntegrity?.androidEvidenceLevel,
+      attestationStatus: deviceIntegrity?.attestationStatus,
+      level3KeystoreSignature: deviceIntegrity?.level3KeystoreSignature,
+      level4AttestationMaterial: deviceIntegrity?.level4AttestationMaterial,
+      level4HardwareAttestation: deviceIntegrity?.level4HardwareAttestation,
+      level3KeystoreEvidence: deviceIntegrity ? level3KeystoreEvidenceMatches(deviceIntegrity) : false,
+      pendingLevel4MaterialShape: deviceIntegrity
+        ? level3PendingHardwareAttestationMaterialMatches(deviceIntegrity)
+        : false,
+      level4MaterialShape: deviceIntegrity ? level4HardwareAttestationMaterialMatches(deviceIntegrity) : false,
+    },
+    keystoreSignature: {
+      present: Boolean(keystoreSignature),
+      algorithm: keystoreSignature?.algorithm,
+      hasPublicKeyPem: hasText(keystoreSignature?.publicKeyPem as string | undefined),
+      hasSignedPayloadJson: hasText(keystoreSignature?.signedPayloadJson as string | undefined),
+      hasSignatureBase64: hasText(keystoreSignature?.signatureBase64 as string | undefined),
+      publicKeyMatchesTopLevel: keystoreSignature?.publicKeyPem === deviceIntegrity?.keystorePublicKeyPem,
+    },
+    hardwareAttestation: {
+      present: Boolean(hardwareAttestation),
+      supported: hardwareAttestation?.supported,
+      hardwareBacked: hardwareAttestation?.hardwareBacked,
+      rootValidated: hardwareAttestation?.rootValidated,
+      fallbackLevel: hardwareAttestation?.fallbackLevel,
+      reason: hardwareAttestation?.reason,
+      challengeMatchesNonce: hardwareAttestation?.attestationChallengeHex === proof?.nonce,
+      publicKeyMatchesKeystore: hardwareAttestation?.publicKeyPem === keystoreSignature?.publicKeyPem,
+      certificateChainPemCount: arrayTextCount(hardwareAttestation?.certificateChainPem),
+      topLevelCertificateChainPemCount: arrayTextCount(deviceIntegrity?.attestationCertificateChainPem),
+    },
+    motionSnapshot: {
+      available: motionSnapshot?.available,
+      accelerometerAvailable: motionSnapshot?.accelerometerAvailable,
+      gyroscopeAvailable: motionSnapshot?.gyroscopeAvailable,
+      accelerometerCount: Array.isArray(motionSnapshot?.accelerometer) ? motionSnapshot.accelerometer.length : 0,
+      gyroscopeCount: Array.isArray(motionSnapshot?.gyroscope) ? motionSnapshot.gyroscope.length : 0,
+      sampleWindowMs: motionSnapshot?.sampleWindowMs,
+      sampledAtDeltaMs:
+        sampledAtMs !== undefined && manifestCaptureTimestamp !== undefined
+          ? sampledAtMs - manifestCaptureTimestamp
+          : undefined,
+    },
+  };
 }
 
 export function hasRequiredLocalDemoCaptureFields(proof?: ArgusProof | null): boolean {
@@ -391,6 +556,16 @@ export function getSafeArgusVerificationUrl(proof?: ArgusProof | null): string |
 
 function hasText(value?: string): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function arrayTextCount(value: unknown): number {
+  return Array.isArray(value) ? value.filter((entry) => hasText(entry as string | undefined)).length : 0;
 }
 
 function hasBoundedText(value: string | undefined, maxUtf8Bytes: number): value is string {
@@ -607,6 +782,10 @@ function androidEvidencePolicyMatches(deviceIntegrity: Record<string, unknown> |
     return true;
   }
 
+  if (level3PendingHardwareAttestationMaterialMatches(deviceIntegrity)) {
+    return true;
+  }
+
   // kr: registration preflight는 relayer가 root/fingerprint를 검증할 수 있게 Level 4 material shape까지만 허용합니다. UI 승격은 별도 marker를 요구합니다.
   // en: Registration preflight only accepts Level 4 material shape so the relayer can validate the root/fingerprint. UI promotion requires a separate marker.
   return level4HardwareAttestationMaterialMatches(deviceIntegrity);
@@ -634,6 +813,36 @@ function level3KeystoreEvidenceMatches(deviceIntegrity: Record<string, unknown>)
     deviceIntegrityKeystoreSignatureEvidenceMatches(deviceIntegrity) &&
     deviceIntegrity.level4HardwareAttestation === false &&
     hardwareAttestationFallbackMatches(deviceIntegrity.hardwareAttestation, 3)
+  );
+}
+
+function level3PendingHardwareAttestationMaterialMatches(deviceIntegrity: Record<string, unknown>): boolean {
+  const hardwareAttestation = deviceIntegrity.hardwareAttestation as Record<string, unknown> | undefined;
+  return (
+    deviceIntegrity.evidenceLevel === "level_3_keystore_signature" &&
+    deviceIntegrity.androidEvidenceLevel === 3 &&
+    deviceIntegrity.attestationStatus === ARGUS_LEVEL_4_MATERIAL_PENDING_RELAY_VALIDATION &&
+    deviceIntegrity.level4AttestationMaterial === true &&
+    deviceIntegrityKeystoreSignatureEvidenceMatches(deviceIntegrity) &&
+    deviceIntegrity.level4HardwareAttestation === false &&
+    Boolean(hardwareAttestation) &&
+    typeof hardwareAttestation === "object" &&
+    !Array.isArray(hardwareAttestation) &&
+    hardwareAttestation.supported === false &&
+    hardwareAttestation.hardwareBacked === true &&
+    hardwareAttestation.rootValidated === false &&
+    hardwareAttestation.fallbackLevel === 3 &&
+    hasText(hardwareAttestation.reason as string | undefined) &&
+    hasText(hardwareAttestation.attestationChallengeHex as string | undefined) &&
+    hasText(hardwareAttestation.publicKeyPem as string | undefined) &&
+    Array.isArray(hardwareAttestation.certificateChainPem) &&
+    hardwareAttestation.certificateChainPem.some(
+      (certificate) => typeof certificate === "string" && certificate.trim().length > 0,
+    ) &&
+    Array.isArray(deviceIntegrity.attestationCertificateChainPem) &&
+    deviceIntegrity.attestationCertificateChainPem.some(
+      (certificate) => typeof certificate === "string" && certificate.trim().length > 0,
+    )
   );
 }
 

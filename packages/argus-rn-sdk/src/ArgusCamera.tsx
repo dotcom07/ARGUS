@@ -15,21 +15,31 @@ type ArgusCameraProps = {
 // en: ArgusCamera lets partner apps attach the native verified camera flow with one button.
 export function ArgusCamera(props: ArgusCameraProps) {
   const [isCapturing, setIsCapturing] = useState(false);
+  const [statusLabel, setStatusLabel] = useState("Capture with Argus SDK");
 
   async function handlePress() {
     setIsCapturing(true);
+    setStatusLabel("Opening camera...");
 
     try {
-      const proof = await createCaptureProof({
-        partnerId: props.partnerId,
-        useCase: props.useCase,
-        metadata: props.metadata,
-      });
+      const proof = await createCaptureProof(
+        {
+          partnerId: props.partnerId,
+          useCase: props.useCase,
+          metadata: props.metadata,
+        },
+        {
+          onNativeProofCreated() {
+            setStatusLabel("Verifying with Argus...");
+          },
+        },
+      );
       props.onProofCreated(proof);
     } catch (error) {
       props.onError?.(error as Error);
     } finally {
       setIsCapturing(false);
+      setStatusLabel("Capture with Argus SDK");
     }
   }
 
@@ -48,7 +58,7 @@ export function ArgusCamera(props: ArgusCameraProps) {
         }}
       >
         <Text style={{ color: "#ffffff", fontSize: 15, fontWeight: "800" }}>
-          {isCapturing ? "Opening camera..." : "Capture with Argus SDK"}
+          {statusLabel}
         </Text>
       </Pressable>
     </View>

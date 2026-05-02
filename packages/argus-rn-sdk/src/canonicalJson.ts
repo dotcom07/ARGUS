@@ -90,14 +90,14 @@ class CanonicalJsonParser {
       return;
     }
 
-    let previousKey: string | undefined;
+    const seenKeys = new Set<string>();
     while (true) {
       const key = this.parseString();
-      if (previousKey !== undefined && key <= previousKey) {
-        this.fail("object keys must be sorted and unique");
+      if (seenKeys.has(key)) {
+        this.fail("object keys must be unique");
       }
 
-      previousKey = key;
+      seenKeys.add(key);
       this.expect(":");
       this.path.push(key);
       try {
