@@ -14,6 +14,10 @@
     "android:debug": "cd android && ./gradlew :app:assembleDebug",
     "demo": "node scripts/print-rn-demo-instructions.mjs",
     "demo:web-preview": "node scripts/serve-demo.mjs",
+    "devnet:prepare": "node scripts/argus-devnet.mjs prepare",
+    "devnet:deploy": "node scripts/argus-devnet.mjs deploy",
+    "devnet:deploy:init": "node scripts/argus-devnet.mjs deploy --init",
+    "devnet:init": "node scripts/argus-devnet.mjs init",
     "relayer:server": "node api/relayer/server.mjs",
     "test": "node scripts/verify-demo.mjs && node api/relayer/registerProof.security.test.mjs && node api/relayer/submitRegisterProof.security.test.mjs && node packages/argus-rn-sdk/src/demoProof.security.test.mjs && node packages/argus-rn-sdk/src/registerProofWithRelayer.security.test.mjs && cargo test --manifest-path crates/argus-core/Cargo.toml && cargo test --manifest-path programs/argus-registry/Cargo.toml && node --check apps/marketplace-demo/index.js && node --check apps/verifier-web/index.js && node scripts/register-proof.mjs"
   },

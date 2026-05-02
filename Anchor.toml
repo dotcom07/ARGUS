@@ -8,5 +8,5 @@ argus_registry = "STmkbEWTmfBJR2mDHrbvKNjo2spT6mPU9668mw2hMaL"
 argus_registry = "STmkbEWTmfBJR2mDHrbvKNjo2spT6mPU9668mw2hMaL"
 
 [provider]
-cluster = "localnet"
-wallet = "~/.config/solana/id.json"
+cluster = "devnet"
+wallet = ".argus-devnet-keypair.json"

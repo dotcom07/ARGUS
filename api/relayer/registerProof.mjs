@@ -9,7 +9,7 @@ import {
 } from "./requestTextPolicy.mjs";
 import { validateAndConsumeCaptureSession } from "./sessionStore.mjs";
 
-const DEFAULT_REGISTRY_ADDRESS = "Fg6PaFpoGXkYsidMpWxTWqgPfwT12r7zkbJ3Fqk7xRVE";
+const DEFAULT_REGISTRY_ADDRESS = "STmkbEWTmfBJR2mDHrbvKNjo2spT6mPU9668mw2hMaL";
 const DEFAULT_DEMO_RELAYER = "ArgusLocalDemoRelayer111111111111111111111111";
 const REGISTRY_SCHEMA_VERSION = 1;
 const MANIFEST_SCHEMA_VERSION = "argus.manifest.v1";

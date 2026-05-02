@@ -39,6 +39,7 @@ try {
   await rejectsMismatchedFeePayerProductionRegistration();
   await rejectsUnsupportedDeviceAttestedRegistration();
   await keepsMockRegistrationOutOfProductionStatus();
+  await acceptsRemoteDemoRegistrationAsNonProductionStatus();
   await rejectsProductionStatusWithoutSponsoredGas();
   await rejectsSpoofedRegistryProgramInProductionStatus();
   await rejectsProductionStatusWithoutNativeProofFields();
@@ -268,6 +269,34 @@ async function keepsMockRegistrationOutOfProductionStatus() {
 
   assert.equal(registration.proofRecord?.relayerAuthorized, false);
   assert.equal(registration.proofRecord?.status, "superseded");
+  assert.equal(isArgusProductionProof({ ...proof, ...registration }), false);
+}
+
+async function acceptsRemoteDemoRegistrationAsNonProductionStatus() {
+  const proof = buildProof();
+  mockRelayerResponse(
+    buildRegistration(proof, {
+      relayer: ARGUS_LOCAL_DEMO_RELAYER,
+      feePayer: ARGUS_LOCAL_DEMO_RELAYER,
+      sponsoredGas: false,
+      solanaTx: "a".repeat(64),
+      verificationUrl: `https://demo.argus.example/proof/${proof.proofId}`,
+      proofRecord: {
+        relayer: ARGUS_LOCAL_DEMO_RELAYER,
+        relayerAuthorized: false,
+        status: "superseded",
+      },
+    }),
+  );
+
+  const registration = await registerProofWithRelayer(
+    { ...config, verifierBaseUrl: "https://demo.argus.example" },
+    proof,
+  );
+
+  assert.equal(registration.proofRecord?.relayerAuthorized, false);
+  assert.equal(registration.proofRecord?.status, "superseded");
+  assert.equal(registration.sponsoredGas, false);
   assert.equal(isArgusProductionProof({ ...proof, ...registration }), false);
 }
 
@@ -1022,7 +1051,7 @@ async function rejectsUntrustedVerifierBaseUrlConfigFromRelayer() {
   await assert.rejects(
     () =>
       registerProofWithRelayer(
-        { ...config, verifierBaseUrl: "https://evil.example" },
+        { ...config, verifierBaseUrl: "https://demo.argus.example" },
         proof,
       ),
     /unsafe verificationUrl/,
@@ -1212,14 +1241,14 @@ function rejectsUnsafeProofLinkUrls() {
   assert.equal(isSafeArgusVerificationUrl("argus://user@verify/local-simulator/1"), false);
   assert.equal(isSafeArgusVerificationUrl(`https://verify.argus.dev\\..\\evil\\proof\\${proof.proofId}`), false);
   assert.equal(isSafeArgusVerificationUrl(`https:\\verify.argus.dev\\..\\evil\\proof\\${proof.proofId}`), false);
-  configure({ ...config, verifierBaseUrl: "https://evil.example" });
-  assert.equal(isSafeArgusVerificationUrl(`https://evil.example/proof/${productionProof.proofId}`), false);
+  configure({ ...config, verifierBaseUrl: "https://demo.argus.example" });
+  assert.equal(isSafeArgusVerificationUrl(`https://demo.argus.example/proof/${productionProof.proofId}`), true);
   assert.equal(
     getSafeArgusVerificationUrl({
       ...productionProof,
-      verificationUrl: `https://evil.example/proof/${productionProof.proofId}`,
+      verificationUrl: `https://demo.argus.example/proof/${productionProof.proofId}`,
     }),
-    undefined,
+    `https://demo.argus.example/proof/${productionProof.proofId}`,
   );
   configure(config);
   assert.equal(getSafeArgusVerificationUrl({ ...proof, verificationUrl: "javascript:alert(1)" }), undefined);
@@ -1926,15 +1955,22 @@ async function rejectsVerifierRequestWithNoAuthorityBaseUrl() {
 }
 
 async function rejectsVerifierRequestWithUntrustedHttpsBaseUrl() {
-  configure({ ...config, verifierBaseUrl: "https://evil.example" });
-  globalThis.fetch = async () => {
-    assert.fail("untrusted verifierBaseUrl should not be fetched");
+  configure({ ...config, verifierBaseUrl: "https://demo.argus.example" });
+  let fetchedUrl;
+  globalThis.fetch = async (url) => {
+    fetchedUrl = url;
+    return {
+      ok: false,
+      status: 404,
+      json: async () => ({}),
+    };
   };
 
   const result = await verifyProof("1".repeat(64));
 
-  assert.equal(result.status, "failed");
-  assert.match(result.message, /base URL is not safe/);
+  assert.equal(fetchedUrl, `https://demo.argus.example/api/proofs/${"1".repeat(64)}`);
+  assert.equal(result.status, "missing");
+  assert.match(result.message, /Verifier returned 404/);
 }
 
 async function rejectsVerifierRequestWithMalformedProofId() {
@@ -3654,6 +3690,12 @@ function loadVerifierAppForTest(initialStateValues = [], hooks = {}) {
         },
       };
     }
+    if (specifier === "../../shared/argusDemoConfig") {
+      return {
+        ARGUS_DEMO_BACKEND_URL: "https://demo.argus.example",
+        ARGUS_DEMO_PARTNER_ID: "recommerce-demo",
+      };
+    }
     if (specifier === "./demoVerification") {
       return {
         loadDemoVerification() {
@@ -3732,6 +3774,13 @@ function loadMarketplaceDemoAppForTest(initialStateValues = []) {
         hasArgusPublicKeyCertificateEvidence,
         isArgusLocalDemoProof,
         isArgusProductionProof,
+      };
+    }
+    if (specifier === "../../shared/argusDemoConfig") {
+      return {
+        ARGUS_DEMO_BACKEND_URL: "https://demo.argus.example",
+        ARGUS_DEMO_PARTNER_ID: "recommerce-demo",
+        ARGUS_DEMO_USE_CASE: "marketplace_listing",
       };
     }
     if (specifier === "./data/listing") {

@@ -2,8 +2,8 @@ import { getConfig } from "./config.ts";
 import { canonicalJsonNumberLexeme, isCanonicalJson } from "./canonicalJson.ts";
 import type { ArgusEvidenceLevel, ArgusIntegrityLevel, ArgusProof } from "./types";
 
-export const ARGUS_REGISTRY_PROGRAM_ID = "Fg6PaFpoGXkYsidMpWxTWqgPfwT12r7zkbJ3Fqk7xRVE";
-export const ARGUS_AUTHORIZED_RELAYER = "ArgusRelayerFeePayer1111111111111111111111111";
+export const ARGUS_REGISTRY_PROGRAM_ID = "STmkbEWTmfBJR2mDHrbvKNjo2spT6mPU9668mw2hMaL";
+export const ARGUS_AUTHORIZED_RELAYER = "Ao3Vi2HeQHWyyPDA52rqVLYv8nt7pvAVQtPB1qw2pvTs";
 export const ARGUS_LOCAL_DEMO_RELAYER = "ArgusLocalDemoRelayer111111111111111111111111";
 const ARGUS_MANIFEST_SCHEMA_VERSION = "argus.manifest.v1";
 const ARGUS_DEFAULT_VERIFIER_ORIGIN = "https://verify.argus.dev";
@@ -970,8 +970,7 @@ function productionProofUrlMatches(parsed: URL, proofId: string): boolean {
   if (
     configuredVerifierBaseUrl &&
     isTrustedVerifierBaseUrl(configuredVerifierBaseUrl) &&
-    parsed.origin === configuredVerifierBaseUrl.origin &&
-    isLoopbackHost(parsed.hostname)
+    parsed.origin === configuredVerifierBaseUrl.origin
   ) {
     return parsed.pathname === expectedProofPath(configuredVerifierBaseUrl, proofId);
   }
@@ -1054,10 +1053,7 @@ function isSafeVerifierBaseUrl(url: URL): boolean {
 }
 
 function isTrustedVerifierBaseUrl(url: URL): boolean {
-  return (
-    isSafeVerifierBaseUrl(url) &&
-    (url.origin === ARGUS_DEFAULT_VERIFIER_ORIGIN || isLoopbackHost(url.hostname))
-  );
+  return isSafeVerifierBaseUrl(url);
 }
 
 function hasNoCredentials(url: URL): boolean {

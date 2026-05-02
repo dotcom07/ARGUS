@@ -25,7 +25,7 @@ import { authorizeCaptureSession, clearCaptureSessions } from "./sessionStore.mj
 
 const { createDemoCaptureProof } = await import("../../packages/argus-rn-sdk/src/demoProof.mjs");
 
-const TRUSTED_REGISTRY_PROGRAM_ID = "Fg6PaFpoGXkYsidMpWxTWqgPfwT12r7zkbJ3Fqk7xRVE";
+const TRUSTED_REGISTRY_PROGRAM_ID = "STmkbEWTmfBJR2mDHrbvKNjo2spT6mPU9668mw2hMaL";
 const demoProof = await createDemoCaptureProof({
   partnerId: "recommerce-demo",
   useCase: "marketplace_listing",
@@ -92,6 +92,8 @@ process.env.ARGUS_PARTNER_APP_ALLOWLIST = JSON.stringify([
     useCases: [proof.useCase],
   },
 ]);
+process.env.ARGUS_VERIFIER_BASE_URL_ALLOWLIST = JSON.stringify(["https://verify.argus.dev"]);
+process.env.ARGUS_RELAYER_MODE = "demo";
 
 await rejectsProductionRegistryProgramOverrideBeforeSolana();
 await rejectsHashOnlyRequestBeforeSolana();
@@ -1920,12 +1922,14 @@ async function withInvalidSolanaRpcAndKeypair(callback) {
   const originalRpcUrl = process.env.SOLANA_RPC_URL;
   const originalAnchorProviderUrl = process.env.ANCHOR_PROVIDER_URL;
   const originalRelayerKeypair = process.env.ARGUS_RELAYER_KEYPAIR;
+  const originalAuthorizedRelayer = process.env.ARGUS_AUTHORIZED_RELAYER_PUBLIC_KEY;
   const tempDir = await mkdtemp(join(tmpdir(), "argus-relayer-test-"));
   const keypairPath = join(tempDir, "relayer-keypair.json");
   await writeFile(keypairPath, JSON.stringify(Array.from(Keypair.generate().secretKey)));
   process.env.SOLANA_RPC_URL = "not-a-url";
   delete process.env.ANCHOR_PROVIDER_URL;
   process.env.ARGUS_RELAYER_KEYPAIR = keypairPath;
+  delete process.env.ARGUS_AUTHORIZED_RELAYER_PUBLIC_KEY;
 
   try {
     return await callback();
@@ -1933,6 +1937,7 @@ async function withInvalidSolanaRpcAndKeypair(callback) {
     restoreEnv("SOLANA_RPC_URL", originalRpcUrl);
     restoreEnv("ANCHOR_PROVIDER_URL", originalAnchorProviderUrl);
     restoreEnv("ARGUS_RELAYER_KEYPAIR", originalRelayerKeypair);
+    restoreEnv("ARGUS_AUTHORIZED_RELAYER_PUBLIC_KEY", originalAuthorizedRelayer);
     await rm(tempDir, { force: true, recursive: true });
   }
 }

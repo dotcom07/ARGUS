@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 .argus-devnet-keypair.json
+.argus-registry-program-keypair.json
 *.key
 *.pem
 *.p12

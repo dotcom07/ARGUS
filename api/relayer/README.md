@@ -8,7 +8,7 @@ The authorized production relayer fee payer sponsors Argus Registry registration
 
 For the local demo, `registerProof.mjs` creates a deterministic display-only Solana-like transaction reference from preview commitments. This is a demo artifact, not a production registry acceptance: demo preview records are returned as non-authorized, superseded records and do not claim sponsored gas.
 
-Verifier and client UI must treat any `proofRecord` with `relayerAuthorized: false`, a non-`active` status, or a non-production relayer as non-production even when manifest, image, and evidence hashes match.
+Verifier and client UI must treat any `proofRecord` with `relayerAuthorized: false`, a non-`active` status, or a non-production relayer as non-production even when manifest, image, and evidence hashes match. The RN SDK accepts that demo HTTP response only to finish the demo flow; it does not promote it to an Argus production proof.
 
 The static local marketplace preview is served by `npm run demo:web-preview` at `http://127.0.0.1:4173/apps/marketplace-demo/` by default, with the verifier at `http://127.0.0.1:4173/apps/verifier-web/`; the port increments if 4173 is occupied. These loopback URLs are local-development surfaces only, and the marketplace screen is one integration example rather than relayer product scope.
 
@@ -19,6 +19,34 @@ npm run relayer:server
 ```
 
 It listens on `0.0.0.0:${PORT:-8787}` and exposes `GET /health`, `POST /capture-session`, `POST /register-proof`, and `GET /api/proofs/:proofId`. The demo proof-bundle store writes JSON files under `.argus-relayer-data/proofs` by default; set `ARGUS_PROOF_BUNDLE_DIR` to move that storage outside the repo checkout.
+
+For the Hyonix/WSL demo server, keep the backend and tunnel alive with tmux:
+
+```bash
+tmux new -s argus-backend
+cd ~/ARGUS
+nvm use 20
+export ARGUS_VERIFIER_BASE_URL_ALLOWLIST='["https://<quick-tunnel>.trycloudflare.com"]'
+PORT=8787 npm run relayer:server
+```
+
+Detach with `Ctrl+b`, then `d`, and start the tunnel in a second session:
+
+```bash
+tmux new -s argus-tunnel
+cloudflared tunnel --url http://localhost:8787
+```
+
+Use the generated `https://<quick-tunnel>.trycloudflare.com` URL as both `relayerUrl` and `verifierBaseUrl` for the demo app. The current React Native demo URL lives in `apps/shared/argusDemoConfig.ts`; update it whenever Quick Tunnel issues a new URL. The relayer must also have the same URL in `ARGUS_VERIFIER_BASE_URL_ALLOWLIST`, otherwise `/register-proof` rejects the verifier URL before storing the proof bundle.
+
+Smoke-test the tunnel from another machine:
+
+```bash
+curl https://<quick-tunnel>.trycloudflare.com/health
+curl -X POST https://<quick-tunnel>.trycloudflare.com/capture-session \
+  -H 'content-type: application/json' \
+  --data '{"partnerId":"recommerce-demo","useCase":"marketplace_listing","appIdentityHash":"c5f00555103b31cc35ccbd6119db30b93d1a8244302361acca205c01ff7d247e"}'
+```
 
 Before native capture, the SDK should call the relayer's `POST /capture-session` equivalent. The demo implementation is `openCaptureSession.mjs`, which records a short-lived capture session ID + nonce + partner/use case/app identity tuple in `sessionStore.mjs`; `registerProof.mjs` consumes that exact tuple during proof registration.
 
@@ -49,7 +77,7 @@ Do not describe this demo mode as fully trustless client-side verification. In t
 
 Android evidence levels are carried inside the committed `deviceIntegrityJson` while the registry `proofLevel` remains `app_capture`. Level 2 is the native camera + app identity + motion baseline. Level 3 requires a Keystore signature over the proof manifest or binding message, currently binding the relayer session, manifest fields, image/evidence commitments, capture timestamp, and unsigned device evidence hash; the verifier path must validate the signature and signer public key. Level 4 requires the Level 3 signature plus Android Key Attestation certificate-chain validation: the leaf public key must match the Keystore signature key, the Android attestation extension challenge must match the session nonce, the attestation/keymaster security levels must be TEE or StrongBox, and the root certificate SHA-256 fingerprint must match `ARGUS_ANDROID_ATTESTATION_ROOT_SHA256`. Without that configured and validated trust root, Level 4 fails closed and the app/device should fall back to Level 3 or Level 2. Devices that cannot provide hardware attestation must explicitly fall back to Level 3 or Level 2; the relayer rejects Level 4 claims that use fallback material.
 
-`registerProof.mjs` only returns verifier links for allowlisted verifier bases. The default production verifier is `https://verify.argus.dev`; set `ARGUS_VERIFIER_BASE_URL_ALLOWLIST` to a JSON array of trusted base URLs when deploying a branded verifier. Base paths are supported only when the exact normalized base path is allowlisted, and duplicate normalized verifier bases fail closed as config errors before consuming sessions. Raw URL paths are checked before parser/proxy normalization: raw slash/backslash traversal is rejected, and encoded separators are accepted only for exact allowlisted base paths and are rejected when they decode into `.` or `..` traversal. Loopback verifier bases, including `http` and `https` localhost, 127/8 IPv4 forms, IPv4-mapped 127/8 IPv6 forms, and `[::1]`, are rejected when `NODE_ENV=production`; production also fails closed if the verifier allowlist itself contains one of those loopback roots. Loopback verifier bases are accepted only for local development. The current RN SDK production client trusts the default production origin and loopback development bases; branded verifier support needs a matching client-side trust update, not only a relayer allowlist entry.
+`registerProof.mjs` only returns verifier links for allowlisted verifier bases. The default production verifier is `https://verify.argus.dev`; set `ARGUS_VERIFIER_BASE_URL_ALLOWLIST` to a JSON array of trusted base URLs when deploying a branded verifier or Quick Tunnel demo verifier. Base paths are supported only when the exact normalized base path is allowlisted, and duplicate normalized verifier bases fail closed as config errors before consuming sessions. Raw URL paths are checked before parser/proxy normalization: raw slash/backslash traversal is rejected, and encoded separators are accepted only for exact allowlisted base paths and are rejected when they decode into `.` or `..` traversal. Loopback verifier bases, including `http` and `https` localhost, 127/8 IPv4 forms, IPv4-mapped 127/8 IPv6 forms, and `[::1]`, are rejected when `NODE_ENV=production`; production also fails closed if the verifier allowlist itself contains one of those loopback roots. Loopback verifier bases are accepted only for local development. The RN SDK treats its configured HTTPS `verifierBaseUrl` as the verifier trust root, so the app config and relayer allowlist must point to the same base URL.
 
 Returned verifier links have the route shape `<normalizedVerifierBaseUrl>/proof/{proofId}` with no credentials, query, or fragment. RN verifier API calls use `<normalizedVerifierBaseUrl>/api/proofs/{proofId}` under the same trusted base. Verifier/client proof IDs and relayer request proof/hash IDs are canonical lowercase non-zero 64-hex strings. The static browser preview URL above is only the local app shell; its demo preview links must use exact `index.html?proofId={lowercase-64-hex-proofId}` localStorage records, not a production relayer route. A preview URL without `proofId` is invalid and does not auto-load a saved demo preview bundle.
 

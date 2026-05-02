@@ -94,7 +94,7 @@ assert.match(marketplaceWeb, /No authorized production registry write: simulated
 const verifierRn = readFileSync("apps/verifier-web/src/App.tsx", "utf8");
 assert.match(verifierRn, /VerificationResult/);
 assert.match(verifierRn, /verifyProof/);
-assert.match(verifierRn, /https:\/\/verify\.argus\.dev/);
+assert.match(verifierRn, /ARGUS_DEMO_BACKEND_URL/);
 assert.match(verifierRn, /transaction reference/);
 assert.doesNotMatch(verifierRn, /Solana transaction/);
 assert.match(verifierRn, /Argus does not verify/);
@@ -209,7 +209,7 @@ assert.match(relayerSubmit, /global:register_proof/);
 
 const anchorToml = readFileSync("programs/argus-registry/Anchor.toml", "utf8");
 assert.match(anchorToml, /programs.devnet/);
-assert.match(anchorToml, /Fg6PaFpoGXkYsidMpWxTWqgPfwT12r7zkbJ3Fqk7xRVE/);
+assert.match(anchorToml, /argus_registry = "[1-9A-HJ-NP-Za-km-z]{32,44}"/);
 
 const androidActivity = readFileSync(
   "packages/argus-rn-sdk/android/src/main/java/com/argus/ArgusCameraActivity.kt",

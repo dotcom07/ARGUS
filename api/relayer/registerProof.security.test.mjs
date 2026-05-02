@@ -2641,12 +2641,15 @@ async function withPartnerAllowlist(entries, callback) {
 
 async function withVerifierAllowlist(entries, callback) {
   const originalAllowlist = process.env.ARGUS_VERIFIER_BASE_URL_ALLOWLIST;
+  const originalAllowlistLocked = process.env.ARGUS_TEST_VERIFIER_ALLOWLIST_LOCKED;
   process.env.ARGUS_VERIFIER_BASE_URL_ALLOWLIST = JSON.stringify(entries);
+  process.env.ARGUS_TEST_VERIFIER_ALLOWLIST_LOCKED = "1";
 
   try {
     return await callback();
   } finally {
     restoreEnv("ARGUS_VERIFIER_BASE_URL_ALLOWLIST", originalAllowlist);
+    restoreEnv("ARGUS_TEST_VERIFIER_ALLOWLIST_LOCKED", originalAllowlistLocked);
   }
 }
 
@@ -2655,6 +2658,9 @@ async function withSolanaModeWithoutRpc(callback) {
   const originalRpcUrl = process.env.SOLANA_RPC_URL;
   const originalAnchorProviderUrl = process.env.ANCHOR_PROVIDER_URL;
   const originalPartnerAllowlist = process.env.ARGUS_PARTNER_APP_ALLOWLIST;
+  const originalVerifierAllowlist = process.env.ARGUS_VERIFIER_BASE_URL_ALLOWLIST;
+  const shouldUseDefaultVerifierAllowlist =
+    process.env.ARGUS_TEST_VERIFIER_ALLOWLIST_LOCKED !== "1";
   process.env.ARGUS_RELAYER_MODE = "solana";
   process.env.SOLANA_RPC_URL = "";
   process.env.ANCHOR_PROVIDER_URL = "";
@@ -2665,6 +2671,9 @@ async function withSolanaModeWithoutRpc(callback) {
       useCases: [proof.useCase],
     },
   ]);
+  if (shouldUseDefaultVerifierAllowlist) {
+    process.env.ARGUS_VERIFIER_BASE_URL_ALLOWLIST = JSON.stringify(["https://verify.argus.dev"]);
+  }
 
   try {
     return await callback();
@@ -2673,6 +2682,9 @@ async function withSolanaModeWithoutRpc(callback) {
     restoreEnv("SOLANA_RPC_URL", originalRpcUrl);
     restoreEnv("ANCHOR_PROVIDER_URL", originalAnchorProviderUrl);
     restoreEnv("ARGUS_PARTNER_APP_ALLOWLIST", originalPartnerAllowlist);
+    if (shouldUseDefaultVerifierAllowlist) {
+      restoreEnv("ARGUS_VERIFIER_BASE_URL_ALLOWLIST", originalVerifierAllowlist);
+    }
   }
 }
 

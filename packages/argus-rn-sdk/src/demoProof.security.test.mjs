@@ -4,8 +4,8 @@ import { createHash } from "node:crypto";
 import { createDemoCaptureProof, stableStringify, verifyDemoProof } from "./demoProof.mjs";
 
 const STORAGE_PREFIX = "argus-proof:";
-const ARGUS_REGISTRY_PROGRAM_ID = "Fg6PaFpoGXkYsidMpWxTWqgPfwT12r7zkbJ3Fqk7xRVE";
-const ARGUS_AUTHORIZED_RELAYER = "ArgusRelayerFeePayer1111111111111111111111111";
+const ARGUS_REGISTRY_PROGRAM_ID = "STmkbEWTmfBJR2mDHrbvKNjo2spT6mPU9668mw2hMaL";
+const ARGUS_AUTHORIZED_RELAYER = "Ao3Vi2HeQHWyyPDA52rqVLYv8nt7pvAVQtPB1qw2pvTs";
 const ARGUS_LOCAL_DEMO_RELAYER = "ArgusLocalDemoRelayer111111111111111111111111";
 const MAX_CANONICAL_MANIFEST_JSON_BYTES = 4 * 1024;
 const MAX_EVIDENCE_JSON_BYTES = 16 * 1024;

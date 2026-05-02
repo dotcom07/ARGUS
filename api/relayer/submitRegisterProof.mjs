@@ -8,7 +8,6 @@ import {
   SystemProgram,
   Transaction,
   TransactionInstruction,
-  sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import { validateAndroidEvidenceLevel } from "./androidEvidencePolicy.mjs";
 import { assertCanonicalJsonBytes, canonicalJsonNumberLexeme } from "./canonicalJson.mjs";
@@ -19,13 +18,15 @@ import { validateAndConsumeCaptureSession } from "./sessionStore.mjs";
 
 loadEnv();
 
-const TRUSTED_REGISTRY_PROGRAM_ID = "Fg6PaFpoGXkYsidMpWxTWqgPfwT12r7zkbJ3Fqk7xRVE";
+const TRUSTED_REGISTRY_PROGRAM_ID = "STmkbEWTmfBJR2mDHrbvKNjo2spT6mPU9668mw2hMaL";
 const REGISTRY_SCHEMA_VERSION = 1;
 const MANIFEST_SCHEMA_VERSION = "argus.manifest.v1";
 const SUPPORTED_PROOF_LEVELS = new Set(["app_capture"]);
 const SUPPORTED_USE_CASES = new Set(["marketplace_listing"]);
 const MAX_CAMERA_EVIDENCE_DELAY_MS = 5_000;
 const MAX_MOTION_CAPTURE_DELTA_MS = 2_000;
+const CONFIRMED_COMMITMENT = "confirmed";
+const SIGNATURE_CONFIRM_TIMEOUT_MS = 90_000;
 
 // kr: submitRegisterProof는 Anchor register_proof instruction을 devnet/localnet에 직접 제출합니다.
 // en: submitRegisterProof submits the Anchor register_proof instruction directly to devnet/localnet.
@@ -49,7 +50,7 @@ export async function submitRegisterProof(request) {
 
   const payer = await loadRelayerKeypair();
   assertAuthorizedRelayerSigner(payer.publicKey);
-  const connection = new Connection(rpcUrl, "confirmed");
+  const connection = new Connection(rpcUrl, CONFIRMED_COMMITMENT);
   const proofId = hexToBytes32("proofId", registration.proofId);
   const [configAccount] = PublicKey.findProgramAddressSync(
     [Buffer.from("argus-config")],
@@ -74,9 +75,7 @@ export async function submitRegisterProof(request) {
   // kr: proof bundle 검증이 끝난 뒤, chain submit 직전에 session을 소비해 재등록 replay를 막습니다.
   // en: After proof-bundle validation, consume the session just before chain submit to prevent registration replay.
   consumeRegistrationSession(normalizedRequest);
-  const signature = await sendAndConfirmTransaction(connection, transaction, [payer], {
-    commitment: "confirmed",
-  });
+  const signature = await sendAndConfirmViaHttp(connection, transaction, [payer]);
   assertSolanaTransactionSignature(signature);
 
   return {
@@ -86,6 +85,59 @@ export async function submitRegisterProof(request) {
     registryAddress: programId.toBase58(),
     solanaTx: signature,
   };
+}
+
+async function sendAndConfirmViaHttp(connection, transaction, signers) {
+  const latestBlockhash = await connection.getLatestBlockhash(CONFIRMED_COMMITMENT);
+  transaction.feePayer = signers[0].publicKey;
+  transaction.recentBlockhash = latestBlockhash.blockhash;
+  transaction.sign(...signers);
+
+  const signature = await connection.sendRawTransaction(transaction.serialize(), {
+    skipPreflight: false,
+    preflightCommitment: CONFIRMED_COMMITMENT,
+    maxRetries: 5,
+  });
+  await waitForSignatureViaHttp(connection, signature, latestBlockhash.lastValidBlockHeight);
+  return signature;
+}
+
+async function waitForSignatureViaHttp(connection, signature, lastValidBlockHeight) {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < SIGNATURE_CONFIRM_TIMEOUT_MS) {
+    const response = await connection.getSignatureStatuses([signature], {
+      searchTransactionHistory: true,
+    });
+    const status = response.value[0];
+
+    if (status?.err) {
+      throw new Error(`Transaction ${signature} failed: ${JSON.stringify(status.err)}`);
+    }
+
+    if (
+      status?.confirmationStatus === "confirmed" ||
+      status?.confirmationStatus === "finalized" ||
+      status?.confirmations === null
+    ) {
+      return;
+    }
+
+    const currentBlockHeight = await connection.getBlockHeight(CONFIRMED_COMMITMENT);
+    if (currentBlockHeight > lastValidBlockHeight) {
+      throw new Error(`Transaction ${signature} expired before confirmation`);
+    }
+
+    await sleep(1_000);
+  }
+
+  throw new Error(`Timed out waiting for transaction ${signature} confirmation`);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 export function assertSolanaTransactionSignature(value) {

@@ -22,6 +22,11 @@ import {
   isArgusProductionProof,
   type ArgusProof,
 } from "../../../packages/argus-rn-sdk/src";
+import {
+  ARGUS_DEMO_BACKEND_URL,
+  ARGUS_DEMO_PARTNER_ID,
+  ARGUS_DEMO_USE_CASE,
+} from "../../shared/argusDemoConfig";
 import { captureProof, listing } from "./data/listing";
 import { createMarketplaceSimulatorProof } from "./demoProof";
 
@@ -38,9 +43,9 @@ export default function MarketplaceDemoApp() {
 
   useEffect(() => {
     configure({
-      partnerId: "recommerce-demo",
-      relayerUrl: "mock://argus-relayer",
-      verifierBaseUrl: "https://verify.argus.dev",
+      partnerId: ARGUS_DEMO_PARTNER_ID,
+      relayerUrl: ARGUS_DEMO_BACKEND_URL,
+      verifierBaseUrl: ARGUS_DEMO_BACKEND_URL,
     });
   }, []);
 
@@ -138,8 +143,8 @@ export default function MarketplaceDemoApp() {
           <Text style={styles.panelTitle}>Listing photo provenance</Text>
           <Text style={styles.panelCopy}>Example capture-provenance flow for a marketplace listing photo.</Text>
           <ArgusCamera
-            partnerId="recommerce-demo"
-            useCase="marketplace_listing"
+            partnerId={ARGUS_DEMO_PARTNER_ID}
+            useCase={ARGUS_DEMO_USE_CASE}
             metadata={{
               condition: listing.condition,
               listingId: listing.id,

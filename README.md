@@ -184,6 +184,89 @@ http://127.0.0.1:4173/apps/marketplace-demo/
 http://127.0.0.1:4173/apps/verifier-web/
 ```
 
+## Remote Demo Backend
+
+The demo backend can run on a Hyonix Windows server through WSL with Node 20:
+
+```bash
+nvm use 20
+node -v
+npm -v
+```
+
+Expected demo runtime:
+
+```text
+Node v20.20.x
+npm 10.x
+```
+
+Run the relayer and Cloudflare tunnel in two tmux sessions:
+
+```bash
+tmux new -s argus-backend
+cd ~/ARGUS
+nvm use 20
+export ARGUS_VERIFIER_BASE_URL_ALLOWLIST='["https://<quick-tunnel>.trycloudflare.com"]'
+PORT=8787 npm run relayer:server
+```
+
+Detach with `Ctrl+b`, then `d`.
+
+```bash
+tmux new -s argus-tunnel
+cloudflared tunnel --url http://localhost:8787
+```
+
+Check the public URL from another machine:
+
+```bash
+curl https://<quick-tunnel>.trycloudflare.com/health
+curl -X POST https://<quick-tunnel>.trycloudflare.com/capture-session \
+  -H 'content-type: application/json' \
+  --data '{"partnerId":"recommerce-demo","useCase":"marketplace_listing","appIdentityHash":"c5f00555103b31cc35ccbd6119db30b93d1a8244302361acca205c01ff7d247e"}'
+```
+
+The React Native demo reads the current backend URL from [`apps/shared/argusDemoConfig.ts`](./apps/shared/argusDemoConfig.ts). Quick Tunnel URLs change when the tunnel restarts, so update that file before rebuilding the Android demo.
+
+App connection checklist:
+
+```text
+1. Tunnel URL works at /health.
+2. The same URL is in ARGUS_VERIFIER_BASE_URL_ALLOWLIST.
+3. The same URL is in apps/shared/argusDemoConfig.ts.
+4. Rebuild the Android demo so the JS bundle has the new URL.
+5. Shoot with the in-app CameraX flow and check that /register-proof stores the proof bundle.
+```
+
+In demo relayer mode, the app may complete registration, but the returned record stays non-production: `status: "superseded"`, `relayerAuthorized: false`, and `sponsoredGas: false`. Production status requires the Solana relayer mode, an active registry record, the authorized relayer signer, and sponsored gas.
+
+## Devnet Registry Deployment
+
+The devnet deployment helper uses the ignored relayer/admin keypair at `.argus-devnet-keypair.json`. It generates an ignored registry program keypair at `.argus-registry-program-keypair.json`, copies it to Anchor's `target/deploy` path, syncs the public program ID into Anchor/Rust/SDK/relayer constants, and updates local `.env`.
+
+Current devnet IDs after `npm run devnet:prepare`:
+
+```text
+Argus Registry Program: STmkbEWTmfBJR2mDHrbvKNjo2spT6mPU9668mw2hMaL
+Authorized Relayer: Ao3Vi2HeQHWyyPDA52rqVLYv8nt7pvAVQtPB1qw2pvTs
+```
+
+Deploy and initialize on devnet:
+
+```bash
+npm run devnet:prepare
+npm run devnet:deploy:init
+```
+
+If the program is already deployed and only the config PDA needs initialization or relayer rotation:
+
+```bash
+npm run devnet:init
+```
+
+The deploy command requires both `anchor` and `solana` CLIs on `PATH`. `devnet:deploy:init` is idempotent for the registry config: it initializes config when missing, does nothing when the authorized relayer already matches, and calls `update_authorized_relayer` when the config admin is the devnet keypair but the relayer differs.
+
 ## Important Limits
 
 Argus does not prove ownership, item authenticity, legal validity, user intent, item condition, or that the user did not photograph a screen. It only verifies that the submitted photo followed the Argus capture and registration path.

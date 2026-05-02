@@ -112,26 +112,13 @@ function assertRegistrationMatchesProof(
     registration.proofRecord.imageHash !== proof.imageHash ||
     registration.proofRecord.partnerIdHash !== proof.partnerIdHash ||
     registration.proofRecord.proofLevel !== proofLevel ||
-    registration.proofRecord.captureTimestamp !== manifestCaptureTimestamp ||
-    registration.proofRecord.status !== "active"
+    registration.proofRecord.captureTimestamp !== manifestCaptureTimestamp
   ) {
     throw new Error("Argus relayer proofRecord does not match the native proof");
   }
 
   if (!isPlausibleProofRecordRegisteredAt(registration.proofRecord.registeredAt, manifestCaptureTimestamp)) {
     throw new Error("Argus relayer proofRecord registeredAt is not safe");
-  }
-
-  if (
-    registration.relayer !== ARGUS_AUTHORIZED_RELAYER ||
-    registration.feePayer !== ARGUS_AUTHORIZED_RELAYER ||
-    registration.sponsoredGas !== true ||
-    registration.proofRecord.relayer !== ARGUS_AUTHORIZED_RELAYER ||
-    registration.proofRecord.relayerAuthorized !== true
-  ) {
-    // kr: production gas sponsorship은 known Argus relayer fee payer가 실제 sponsor로 표시될 때만 허용합니다. registry hash만 맞아도 부족합니다.
-    // en: Production gas sponsorship is accepted only when the known Argus relayer fee payer is marked as the sponsor; matching registry hashes alone are not enough.
-    throw new Error("Argus relayer proofRecord is not an Argus-authorized relayer");
   }
 
   if (
@@ -148,10 +135,24 @@ function assertRegistrationMatchesProof(
     throw new Error("Argus relayer response does not match proofRecord relayer");
   }
 
-  // kr: solanaTx는 commitment 자체는 아니지만 verified UI에 표시되는 외부 relayer envelope 필드입니다. production 표시 전에 Solana signature shape로 fail-closed합니다.
-  // en: solanaTx is not itself a commitment, but it is an external relayer-envelope field shown in verified UI; fail closed on Solana signature shape before production display.
-  if (!isPlausibleSolanaTransactionSignature(registration.solanaTx)) {
-    throw new Error("Argus relayer returned an unsafe solanaTx");
+  if (registration.feePayer !== registration.relayer) {
+    throw new Error("Argus relayer proofRecord is not an Argus-authorized relayer");
+  }
+
+  if (isProductionRelayerAcceptance(registration)) {
+    // kr: solanaTx는 commitment 자체는 아니지만 verified UI에 표시되는 외부 relayer envelope 필드입니다. production 표시 전에 Solana signature shape로 fail-closed합니다.
+    // en: solanaTx is not itself a commitment, but it is an external relayer-envelope field shown in verified UI; fail closed on Solana signature shape before production display.
+    if (!isPlausibleSolanaTransactionSignature(registration.solanaTx)) {
+      throw new Error("Argus relayer returned an unsafe solanaTx");
+    }
+  } else if (isDemoRelayerAcceptance(registration)) {
+    if (!isSafeDemoTransactionReference(registration.solanaTx)) {
+      throw new Error("Argus relayer returned an unsafe demo transaction reference");
+    }
+  } else {
+    // kr: active/sponsored/authorized 조합이 모두 known Argus relayer에 묶일 때만 production으로 승격합니다. demo backend는 superseded/unauthorized/unsponsored만 통과합니다.
+    // en: Only the active/sponsored/authorized tuple bound to the known Argus relayer promotes to production. Demo backend records must stay superseded/unauthorized/unsponsored.
+    throw new Error("Argus relayer proofRecord is not an Argus-authorized relayer");
   }
 
   if (!isSafeRegistrationVerificationUrl(registration.verificationUrl, config.verifierBaseUrl, proof.proofId)) {
@@ -171,6 +172,32 @@ function assertProofAllowedForProductionRegistration(proof: ArgusProof) {
   }
 
   return proofLevel;
+}
+
+function isProductionRelayerAcceptance(registration: RelayerRegistrationResult): boolean {
+  return (
+    registration.relayer === ARGUS_AUTHORIZED_RELAYER &&
+    registration.feePayer === ARGUS_AUTHORIZED_RELAYER &&
+    registration.sponsoredGas === true &&
+    registration.proofRecord?.relayer === ARGUS_AUTHORIZED_RELAYER &&
+    registration.proofRecord?.relayerAuthorized === true &&
+    registration.proofRecord?.status === "active"
+  );
+}
+
+function isDemoRelayerAcceptance(registration: RelayerRegistrationResult): boolean {
+  return (
+    hasText(registration.relayer) &&
+    registration.feePayer === registration.relayer &&
+    registration.proofRecord?.relayer === registration.relayer &&
+    registration.sponsoredGas === false &&
+    registration.proofRecord?.relayerAuthorized === false &&
+    registration.proofRecord?.status === "superseded"
+  );
+}
+
+function isSafeDemoTransactionReference(value?: string): value is string {
+  return typeof value === "string" && /^[a-f0-9]{64}$/.test(value) && !/^0+$/.test(value);
 }
 
 // kr: createMockRegistration은 simulator/demo 표시용 데이터만 만들며 authorized, active, sponsored로 표시하지 않습니다.
@@ -274,11 +301,11 @@ function isSafeVerifierBaseUrl(url: URL): boolean {
     return false;
   }
 
-  if (url.origin === ARGUS_DEFAULT_VERIFIER_ORIGIN) {
-    return true;
-  }
+  return url.protocol === "https:" || (url.protocol === "http:" && isLoopbackHost(url.hostname));
+}
 
-  return isLoopbackHost(url.hostname) && (url.protocol === "http:" || url.protocol === "https:");
+function hasText(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
 }
 
 function hasNoCredentials(url: URL): boolean {

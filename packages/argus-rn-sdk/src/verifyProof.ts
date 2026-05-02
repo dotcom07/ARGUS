@@ -594,11 +594,7 @@ function isSafeVerifierBaseUrl(url: URL): boolean {
     return false;
   }
 
-  if (url.origin === ARGUS_DEFAULT_VERIFIER_ORIGIN) {
-    return true;
-  }
-
-  return isLoopbackHost(url.hostname) && (url.protocol === "http:" || url.protocol === "https:");
+  return url.protocol === "https:" || (url.protocol === "http:" && isLoopbackHost(url.hostname));
 }
 
 function isLoopbackHost(hostname: string): boolean {

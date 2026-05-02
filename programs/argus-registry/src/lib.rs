@@ -1,7 +1,7 @@
 use crate::program::ArgusRegistry;
 use anchor_lang::prelude::*;
 
-declare_id!("Fg6PaFpoGXkYsidMpWxTWqgPfwT12r7zkbJ3Fqk7xRVE");
+declare_id!("STmkbEWTmfBJR2mDHrbvKNjo2spT6mPU9668mw2hMaL");
 
 const ARGUS_CONFIG_SEED: &[u8] = b"argus-config";
 const ARGUS_PROOF_SEED: &[u8] = b"argus-proof";

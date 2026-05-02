@@ -10,6 +10,7 @@ import {
   verifyProof,
   type VerificationResult,
 } from "../../../packages/argus-rn-sdk/src";
+import { ARGUS_DEMO_BACKEND_URL, ARGUS_DEMO_PARTNER_ID } from "../../shared/argusDemoConfig";
 import { loadDemoVerification } from "./demoVerification";
 
 type VerifierAppProps = {
@@ -21,13 +22,13 @@ type VerifierAppProps = {
 // en: VerifierApp separates production verifier results from local demo preview results while showing proofId status.
 export default function VerifierApp({ proofId, verifierBaseUrl }: VerifierAppProps) {
   const [result, setResult] = useState<VerificationResult>(() => loadDemoVerification());
-  const activeVerifierBaseUrl = verifierBaseUrl ?? "https://verify.argus.dev";
+  const activeVerifierBaseUrl = verifierBaseUrl ?? ARGUS_DEMO_BACKEND_URL;
   const hasProofRequest = Boolean(proofId);
 
   useEffect(() => {
     configure({
-      partnerId: "recommerce-demo",
-      relayerUrl: "mock://argus-relayer",
+      partnerId: ARGUS_DEMO_PARTNER_ID,
+      relayerUrl: ARGUS_DEMO_BACKEND_URL,
       verifierBaseUrl: activeVerifierBaseUrl,
     });
   }, [activeVerifierBaseUrl]);
