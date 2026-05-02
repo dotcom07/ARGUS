@@ -46,6 +46,11 @@ export async function submitRegisterProof(request) {
     consumeSession: false,
     consumeSessionOnValidationFailure: true,
   });
+  console.info("[Argus relayer] Solana submitter validation passed", {
+    proofId: shortValue(registration.proofId),
+    proofLevel: registration.proofLevel,
+    useCase: registration.useCase,
+  });
   const rpcUrl = process.env.SOLANA_RPC_URL || process.env.ANCHOR_PROVIDER_URL;
   if (!rpcUrl) {
     throw new Error("SOLANA_RPC_URL or ANCHOR_PROVIDER_URL is required");
@@ -63,6 +68,14 @@ export async function submitRegisterProof(request) {
     [Buffer.from("argus-proof"), Buffer.from(proofId)],
     programId,
   );
+  console.info("[Argus relayer] Solana instruction prepared", {
+    proofId: shortValue(registration.proofId),
+    registryProgramId: programId.toBase58(),
+    relayer: payer.publicKey.toBase58(),
+    configAccount: configAccount.toBase58(),
+    proofRecord: proofRecord.toBase58(),
+    rpcHost: safeRpcHost(rpcUrl),
+  });
 
   const instruction = new TransactionInstruction({
     programId,
@@ -78,7 +91,13 @@ export async function submitRegisterProof(request) {
   // kr: proof bundle 검증이 끝난 뒤, chain submit 직전에 session을 소비해 재등록 replay를 막습니다.
   // en: After proof-bundle validation, consume the session just before chain submit to prevent registration replay.
   consumeRegistrationSession(normalizedRequest);
-  const signature = await sendAndConfirmViaHttp(connection, transaction, [payer]);
+  console.info("[Argus relayer] capture session consumed before Solana submit", {
+    proofId: shortValue(registration.proofId),
+    captureSessionId: shortValue(normalizedRequest.captureSessionId),
+  });
+  const signature = await sendAndConfirmViaHttp(connection, transaction, [payer], {
+    proofId: registration.proofId,
+  });
   assertSolanaTransactionSignature(signature);
 
   return {
@@ -90,18 +109,30 @@ export async function submitRegisterProof(request) {
   };
 }
 
-async function sendAndConfirmViaHttp(connection, transaction, signers) {
+async function sendAndConfirmViaHttp(connection, transaction, signers, context = {}) {
   const latestBlockhash = await connection.getLatestBlockhash(CONFIRMED_COMMITMENT);
   transaction.feePayer = signers[0].publicKey;
   transaction.recentBlockhash = latestBlockhash.blockhash;
   transaction.sign(...signers);
 
+  console.info("[Argus relayer] sending Solana transaction", {
+    proofId: shortValue(context.proofId),
+    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+  });
   const signature = await connection.sendRawTransaction(transaction.serialize(), {
     skipPreflight: false,
     preflightCommitment: CONFIRMED_COMMITMENT,
     maxRetries: 5,
   });
+  console.info("[Argus relayer] Solana transaction submitted", {
+    proofId: shortValue(context.proofId),
+    signature: shortValue(signature),
+  });
   await waitForSignatureViaHttp(connection, signature, latestBlockhash.lastValidBlockHeight);
+  console.info("[Argus relayer] Solana transaction confirmed", {
+    proofId: shortValue(context.proofId),
+    signature: shortValue(signature),
+  });
   return signature;
 }
 
@@ -174,6 +205,22 @@ async function loadRelayerKeypair() {
 
 function resolveRepoPath(value) {
   return path.isAbsolute(value) ? value : path.resolve(ROOT_DIR, value);
+}
+
+function shortValue(value) {
+  if (typeof value !== "string" || value.length === 0) {
+    return undefined;
+  }
+
+  return value.length <= 16 ? value : `${value.slice(0, 8)}...${value.slice(-6)}`;
+}
+
+function safeRpcHost(value) {
+  try {
+    return new URL(value).host;
+  } catch {
+    return "invalid-rpc-url";
+  }
 }
 
 function assertAuthorizedRelayerSigner(relayerPublicKey) {

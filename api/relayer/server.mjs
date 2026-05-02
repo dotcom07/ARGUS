@@ -58,14 +58,36 @@ async function routeRequest(request, response) {
 
   if (request.method === "POST" && url.pathname === "/capture-session") {
     const body = await readJsonBody(request);
-    sendJson(response, 200, openRelayerCaptureSession(body));
+    console.info("[Argus relayer] capture session request received", {
+      partnerId: body.partnerId,
+      useCase: body.useCase,
+      appIdentityHash: shortValue(body.appIdentityHash),
+    });
+    const session = openRelayerCaptureSession(body);
+    console.info("[Argus relayer] capture session issued", {
+      captureSessionId: shortValue(session.captureSessionId),
+      expiresAtMs: session.expiresAtMs,
+    });
+    sendJson(response, 200, session);
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/register-proof") {
     const body = await readJsonBody(request);
+    console.info("[Argus relayer] register proof request received", {
+      proofId: shortValue(body.proofId),
+      manifestHash: shortValue(body.manifestHash),
+      imageHash: shortValue(body.imageHash),
+      captureSessionId: shortValue(body.captureSessionId),
+    });
     const registration = await registerProof(body);
     const storedBundle = await storeProofBundle({ registration, request: body });
+    console.info("[Argus relayer] register proof completed", {
+      proofId: shortValue(registration.proofId),
+      solanaTx: shortValue(registration.solanaTx),
+      proofRecord: shortValue(registration.proofRecord?.address),
+      stored: true,
+    });
     sendJson(response, 200, {
       ...registration,
       explorerLinks: storedBundle.explorerLinks,
@@ -127,6 +149,14 @@ async function readJsonBody(request) {
   } catch {
     throw new Error("request body must be valid JSON");
   }
+}
+
+function shortValue(value) {
+  if (typeof value !== "string" || value.length === 0) {
+    return undefined;
+  }
+
+  return value.length <= 16 ? value : `${value.slice(0, 8)}...${value.slice(-6)}`;
 }
 
 function sendJson(response, statusCode, body) {

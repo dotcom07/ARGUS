@@ -34,6 +34,13 @@ export async function registerProof(request) {
     consumeSession: consumeSessionDuringValidation,
     consumeSessionOnValidationFailure: submitToSolana,
   });
+  console.info("[Argus relayer] proof validation passed", {
+    proofId: shortValue(normalizedRequest.proofId),
+    proofLevel: normalizedRequest.proofLevel,
+    useCase: normalizedRequest.useCase,
+    mode: relayerMode,
+    submitToSolana,
+  });
   assertProductionSolanaMode(submitToSolana);
   const verificationUrl = buildVerificationUrl(
     normalizedRequest.verifierBaseUrl,
@@ -44,7 +51,16 @@ export async function registerProof(request) {
   // en: Only Solana mode can create production acceptance; active/authorized/sponsored fee-payer responses are returned only after submitter success.
   if (submitToSolana) {
     const { submitRegisterProof } = await import("./submitRegisterProof.mjs");
+    console.info("[Argus relayer] Solana registration starting", {
+      proofId: shortValue(normalizedRequest.proofId),
+      manifestHash: shortValue(normalizedRequest.manifestHash),
+    });
     const solanaResult = await submitRegisterProof(normalizedRequest);
+    console.info("[Argus relayer] Solana registration finished", {
+      proofId: shortValue(normalizedRequest.proofId),
+      solanaTx: shortValue(solanaResult.solanaTx),
+      proofRecord: shortValue(solanaResult.proofRecord),
+    });
     const proofRecord = buildProofRecord(normalizedRequest, manifest, {
       registeredAt: new Date().toISOString(),
       relayer: solanaResult.relayer,
@@ -96,6 +112,10 @@ export async function registerProof(request) {
     relayerAuthorized: false,
     status: "superseded",
   });
+  console.info("[Argus relayer] demo registration built", {
+    proofId: shortValue(normalizedRequest.proofId),
+    solanaTx: shortValue(solanaTx),
+  });
 
   return {
     proofId: normalizedRequest.proofId,
@@ -109,6 +129,14 @@ export async function registerProof(request) {
     sponsoredGas: false,
     verificationUrl,
   };
+}
+
+function shortValue(value) {
+  if (typeof value !== "string" || value.length === 0) {
+    return undefined;
+  }
+
+  return value.length <= 16 ? value : `${value.slice(0, 8)}...${value.slice(-6)}`;
 }
 
 function normalizeRegistrationRequest(request) {
