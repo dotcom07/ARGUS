@@ -492,10 +492,7 @@ export default function MarketplaceDemoApp() {
             />
           ) : activeTab === "selling" ? (
             <>
-              <View style={styles.sellingHero}>
-                <Text style={styles.eyebrow}>Selling</Text>
                 <Text style={styles.sellingHeroTitle}>List an item</Text>
-              </View>
 
               <View style={styles.panel}>
                 <Text style={styles.panelTitle}>New listing</Text>
@@ -1594,8 +1591,8 @@ const styles = StyleSheet.create({
   },
   sellingHeroTitle: {
     color: "#111827",
-    fontSize: 30,
-    fontWeight: "800",
+    fontSize: 25,
+    fontWeight: "700",
   },
   photoStage: {
     aspectRatio: 1,
