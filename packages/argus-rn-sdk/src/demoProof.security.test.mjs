@@ -8,7 +8,7 @@ const ARGUS_REGISTRY_PROGRAM_ID = "STmkbEWTmfBJR2mDHrbvKNjo2spT6mPU9668mw2hMaL";
 const ARGUS_AUTHORIZED_RELAYER = "Ao3Vi2HeQHWyyPDA52rqVLYv8nt7pvAVQtPB1qw2pvTs";
 const ARGUS_LOCAL_DEMO_RELAYER = "ArgusLocalDemoRelayer111111111111111111111111";
 const MAX_CANONICAL_MANIFEST_JSON_BYTES = 4 * 1024;
-const MAX_EVIDENCE_JSON_BYTES = 16 * 1024;
+const MAX_EVIDENCE_JSON_BYTES = 64 * 1024;
 const MAX_NATIVE_CAPTURE_PHOTO_BYTES = 20 * 1024 * 1024;
 
 const storage = new Map();
@@ -276,7 +276,7 @@ async function rejectsWrongProofId() {
 
 async function rejectsMismatchedDemoVerificationUrl() {
   const tampered = cloneProof(proof);
-  tampered.verificationUrl = `../verifier-web/index.html?proofId=${"7".repeat(64)}`;
+  tampered.verificationUrl = `argus://verify/local-simulator/${"7".repeat(64)}`;
   storeProof(tampered.proofId, tampered);
 
   const result = await verifyDemoProof(tampered.proofId);

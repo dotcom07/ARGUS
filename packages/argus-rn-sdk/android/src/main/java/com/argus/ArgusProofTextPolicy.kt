@@ -3,7 +3,7 @@ package com.argus
 internal object ArgusProofTextPolicy {
     const val MAX_CANONICAL_MANIFEST_JSON_BYTES = 4 * 1024
     const val MAX_METADATA_JSON_BYTES = 64 * 1024
-    const val MAX_EVIDENCE_JSON_BYTES = 16 * 1024
+    const val MAX_EVIDENCE_JSON_BYTES = 64 * 1024
 
     fun requireWithinLimit(field: String, value: String, maxBytes: Int) {
         if (exceedsUtf8ByteLimit(value, maxBytes)) {

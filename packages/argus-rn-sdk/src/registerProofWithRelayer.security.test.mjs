@@ -22,14 +22,13 @@ import {
 } from "./proofStatus.ts";
 import { verifyProof } from "./verifyProof.ts";
 import { createMarketplaceSimulatorProof } from "../../../apps/marketplace-demo/src/demoProof.ts";
-import { resolveBrowserDemoProofId } from "../../../apps/verifier-web/proofRoute.js";
 
 const config = {
   partnerId: "recommerce-demo",
   relayerUrl: "https://relayer.argus.dev",
   verifierBaseUrl: "https://verify.argus.dev",
 };
-const MAX_EVIDENCE_JSON_BYTES = 16 * 1024;
+const MAX_EVIDENCE_JSON_BYTES = 64 * 1024;
 const originalFetch = globalThis.fetch;
 
 try {
@@ -98,9 +97,6 @@ try {
   await acceptsLoopbackIpv6VerifierBasePath();
   rejectsProductionProofLinkToLoopbackWhenDefaultVerifierConfigured();
   rejectsUnsafeProofLinkUrls();
-  rejectsUnsafeVerifierEntrypointRouteVariants();
-  rejectsUppercaseProofIdRouteVariants();
-  rejectsBrowserDemoVerifierAmbiguousRoutes();
   rejectsMarketplaceSimulatorPreviewAsLocalDemoLink();
   await acceptsCompleteProductionVerifiedVerifierResponse();
   await scrubsTopLevelClaimFieldsFromAcceptedVerifierResponses();
@@ -122,12 +118,6 @@ try {
   await treatsVerifierNotFoundAsMissingWithoutClaims();
   await treatsVerifierServerErrorsAsFailedWithoutClaims();
   await treatsVerifierNetworkErrorsAsFailedWithoutClaims();
-  rendersVerifierPendingUiWithoutMissingValues();
-  resetsVerifierResultWhenProofIdClears();
-  rendersVerifierRouteChangeAsPendingWithoutStaleClaims();
-  rendersVerifierNotFoundUiWithoutClaimedFields();
-  rendersVerifierOutageUiAsFailedUnavailable();
-  rendersProductionVerifierCopyWithSponsorshipBoundary();
   verifierTrustBoundaryCopyNamesSponsorship();
   await rejectsIncompleteVerifiedVerifierResponse();
   await rejectsVerifiedVerifierResponseWithoutPhotoBytes();
@@ -170,7 +160,6 @@ try {
   await rejectsDemoProofReportedAsProductionWithoutPartialMatches();
   rejectsIncompleteLocalDemoProofStatus();
   rejectsLocalDemoStatusWithClaimedPartnerIdMismatch();
-  rejectsVerifierPreviewFixtureWithoutProofClaims();
   derivesEvidenceLevelFallbackWithoutOverclaimingAttestation();
   rendersProductionProofSummaryWithTransactionReference();
   rejectsUntrustedDemoProofSummaryOverclaim();
@@ -1275,7 +1264,6 @@ function rejectsUnsafeProofLinkUrls() {
   );
   const localDemoProof = buildLocalDemoProof();
   assert.equal(isArgusLocalDemoProof(localDemoProof), true);
-  assert.equal(isSafeArgusVerificationUrl(`../verifier-web/index.html?proofId=${localDemoProof.proofId}`), true);
   assert.equal(isSafeArgusVerificationUrl(`/proof/${localDemoProof.proofId}`), true);
   assert.equal(isSafeArgusVerificationUrl("/proof/not-a-proof-id"), false);
   assert.equal(isSafeArgusVerificationUrl(`/settings/proof/${localDemoProof.proofId}`), false);
@@ -1412,41 +1400,6 @@ function rejectsUnsafeProofLinkUrls() {
     undefined,
   );
   assert.equal(
-    isArgusLocalDemoProof({
-      ...localDemoProof,
-      verificationUrl: `../verifier-web/index.html?proofId=${localDemoProof.proofId}&next=https://evil.example`,
-    }),
-    false,
-  );
-  assert.equal(
-    getSafeArgusVerificationUrl({
-      ...localDemoProof,
-      verificationUrl: `../verifier-web/index.html?proofId=${localDemoProof.proofId}#trusted`,
-    }),
-    undefined,
-  );
-  assert.equal(
-    getSafeArgusVerificationUrl({
-      ...localDemoProof,
-      verificationUrl: `../verifier-web/index.html?proof%49d=${localDemoProof.proofId}`,
-    }),
-    undefined,
-  );
-  assert.equal(
-    getSafeArgusVerificationUrl({
-      ...localDemoProof,
-      verificationUrl: `../verifier-web/index.html?proofId=${"%31".repeat(64)}`,
-    }),
-    undefined,
-  );
-  assert.equal(
-    getSafeArgusVerificationUrl({
-      ...localDemoProof,
-      verificationUrl: `../verifier-web/index.html?proofId=${localDemoProof.proofId}`,
-    }),
-    `../verifier-web/index.html?proofId=${localDemoProof.proofId}`,
-  );
-  assert.equal(
     getSafeArgusVerificationUrl({
       ...localDemoProof,
       verificationUrl: `/proof/${localDemoProof.proofId}`,
@@ -1517,118 +1470,6 @@ function rejectsUnsafeProofLinkUrls() {
     }),
     `https://verify.argus.dev/proof/${productionProof.proofId}`,
   );
-}
-
-function rejectsUnsafeVerifierEntrypointRouteVariants() {
-  const { extractProofId, extractProofRoute } = loadVerifierEntrypointForTest();
-  const proofId = "1".repeat(64);
-
-  assert.equal(extractProofId(`https://verify.argus.dev/proof/${proofId}`), proofId);
-  assert.equal(extractProofId(`argus://verify/${proofId}`), proofId);
-  assert.equal(extractProofId(`argus://verify/local-simulator/${proofId}`), proofId);
-  assert.equal(extractProofId(`../verifier-web/index.html?proofId=${proofId}`), proofId);
-  assert.deepEqual(extractProofRoute(`https://verify.argus.dev/proof/${proofId}`), {
-    proofId,
-    verifierBaseUrl: "https://verify.argus.dev",
-  });
-  assert.equal(extractProofId(`https://evil.example/proof/${proofId}`), undefined);
-  assert.equal(extractProofId(`https://user@verify.argus.dev/proof/${proofId}`), undefined);
-  assert.equal(extractProofId(`argus://user@verify/local-simulator/${proofId}`), undefined);
-  assert.equal(extractProofId(`https:verify.argus.dev/proof/${proofId}`), undefined);
-  assert.equal(extractProofId(`https://verify.argus.dev/settings/proof/${proofId}`), undefined);
-  assert.equal(extractProofId(`https://verify.argus.dev/settings/%2e%2e/proof/${proofId}`), undefined);
-  assert.equal(extractProofId(`https://verify.argus.dev\\settings\\..\\proof\\${proofId}`), undefined);
-  assert.equal(extractProofId(`https:\\verify.argus.dev\\settings\\..\\proof\\${proofId}`), undefined);
-  assert.equal(extractProofId(`/settings/%2e%2e/proof/${proofId}`), undefined);
-  assert.equal(extractProofId(`../proof/${proofId}`), undefined);
-  assert.equal(extractProofId(`./settings/%2e%2e/proof/${proofId}`), undefined);
-  assert.equal(extractProofId(`https://verify.argus.dev/proof/${proofId}/`), undefined);
-  assert.equal(extractProofId(`https://verify.argus.dev/proof//${proofId}`), undefined);
-  assert.equal(extractProofId(`argus://verify/local-simulator/${proofId}/`), undefined);
-  assert.equal(extractProofId(`argus://verify//local-simulator/${proofId}`), undefined);
-  assert.equal(extractProofId(`https://verify.argus.dev/proof/${proofId}?next=https://evil.example`), undefined);
-  assert.equal(extractProofId(`https://verify.argus.dev/proof/${proofId}#trusted`), undefined);
-  assert.equal(extractProofId("https://verify.argus.dev/proof/%zz"), undefined);
-  assert.equal(extractProofId(`https://verify.argus.dev/proof/${"%31".repeat(64)}`), undefined);
-  assert.equal(extractProofId(`argus://verify/local-simulator/${"%31".repeat(64)}`), undefined);
-  assert.equal(extractProofId("../verifier-web/index.html?proofId=%zz"), undefined);
-  assert.equal(extractProofId(`../verifier-web/index.html?proof%49d=${proofId}`), undefined);
-  assert.equal(extractProofId(`../verifier-web/index.html?proofId=${"%31".repeat(64)}`), undefined);
-  assert.equal(extractProofId(`../verifier-web/index.html?proofId=${proofId}#trusted`), undefined);
-  assert.equal(
-    extractProofId(`../verifier-web/index.html?proofId=${proofId}&next=https://evil.example`),
-    undefined,
-  );
-  assert.equal(
-    extractProofId(`../verifier-web/index.html?proofId=${proofId}&proofId=${proofId}`),
-    undefined,
-  );
-  assert.equal(extractProofId(`https://verify.argus.dev/proof/${"0".repeat(64)}`), undefined);
-  withGlobalLocation(
-    {
-      origin: "https://verify.argus.dev",
-      pathname: `/brand/proof/${proofId}`,
-    },
-    () => {
-      assert.equal(extractProofId(`https://verify.argus.dev/brand/proof/${proofId}`), proofId);
-      assert.deepEqual(extractProofRoute(`https://verify.argus.dev/brand/proof/${proofId}`), {
-        proofId,
-        verifierBaseUrl: "https://verify.argus.dev/brand",
-      });
-      assert.equal(extractProofId(`https://verify.argus.dev/settings/proof/${proofId}`), undefined);
-    },
-  );
-  withGlobalLocation(
-    {
-      origin: "https://verify.argus.dev",
-      pathname: `/brand%2fregion/proof/${proofId}`,
-    },
-    () => {
-      assert.equal(extractProofId(`https://verify.argus.dev/brand%2fregion/proof/${proofId}`), proofId);
-      assert.deepEqual(extractProofRoute(`https://verify.argus.dev/brand%2fregion/proof/${proofId}`), {
-        proofId,
-        verifierBaseUrl: "https://verify.argus.dev/brand%2fregion",
-      });
-    },
-  );
-}
-
-function rejectsUppercaseProofIdRouteVariants() {
-  const { extractProofId } = loadVerifierEntrypointForTest();
-  const proofId = "A".repeat(64);
-
-  assert.equal(extractProofId(`https://verify.argus.dev/proof/${proofId}`), undefined);
-  assert.equal(extractProofId(`argus://verify/local-simulator/${proofId}`), undefined);
-  assert.equal(extractProofId(`../verifier-web/index.html?proofId=${proofId}`), undefined);
-}
-
-function rejectsBrowserDemoVerifierAmbiguousRoutes() {
-  const proofId = "1".repeat(64);
-  const uppercaseProofId = "A".repeat(64);
-
-  assert.equal(resolveBrowserDemoProofId({ search: "", hash: "" }), undefined);
-  assert.equal(resolveBrowserDemoProofId({ search: `?proofId=${proofId}`, hash: "" }), proofId);
-  assert.equal(resolveBrowserDemoProofId({ search: "?proofId=", hash: "" }), undefined);
-  assert.equal(resolveBrowserDemoProofId({ search: "?proofId=%zz", hash: "" }), undefined);
-  assert.equal(
-    resolveBrowserDemoProofId({ search: `?proof%49d=${proofId}`, hash: "" }),
-    undefined,
-  );
-  assert.equal(
-    resolveBrowserDemoProofId({ search: `?proofId=${"%31".repeat(64)}`, hash: "" }),
-    undefined,
-  );
-  assert.equal(
-    resolveBrowserDemoProofId({ search: `?proofId=${proofId}&next=https://evil.example`, hash: "" }),
-    undefined,
-  );
-  assert.equal(
-    resolveBrowserDemoProofId({ search: `?proofId=${proofId}&proofId=${proofId}`, hash: "" }),
-    undefined,
-  );
-  assert.equal(resolveBrowserDemoProofId({ search: "", hash: "#trusted" }), undefined);
-  assert.equal(resolveBrowserDemoProofId({ search: `?proofId=${"0".repeat(64)}`, hash: "" }), undefined);
-  assert.equal(resolveBrowserDemoProofId({ search: `?proofId=${uppercaseProofId}`, hash: "" }), undefined);
 }
 
 function rejectsMarketplaceSimulatorPreviewAsLocalDemoLink() {
@@ -2053,118 +1894,10 @@ async function treatsVerifierNetworkErrorsAsFailedWithoutClaims() {
   assertNoPartialBundleMatches(result);
 }
 
-function rendersVerifierNotFoundUiWithoutClaimedFields() {
-  const { default: VerifierApp } = loadVerifierAppForTest([
-    failedVerificationResult("missing", "Verifier returned 404"),
-  ]);
-  const renderedText = collectRenderedText(VerifierApp({ proofId: "1".repeat(64) })).join("\n");
-
-  assert.match(renderedText, /Proof not found/);
-  assert.match(renderedText, /Proof fields unavailable/);
-  assert.match(renderedText, /No proof bundle was found for this proof ID/);
-  assert.match(renderedText, /Proof ID\nunavailable/);
-  assert.doesNotMatch(renderedText, /Unverified proof claims/);
-  assert.doesNotMatch(renderedText, /Claimed proof ID/);
-  assert.doesNotMatch(renderedText, /Proof ID\nmissing/);
-  assert.doesNotMatch(renderedText, /Not verified:/);
-}
-
-function rendersVerifierOutageUiAsFailedUnavailable() {
-  const { default: VerifierApp } = loadVerifierAppForTest([
-    failedVerificationResult("failed", "Verifier returned 503"),
-  ]);
-  const renderedText = collectRenderedText(VerifierApp({ proofId: "1".repeat(64) })).join("\n");
-
-  assert.match(renderedText, /Proof not verified/);
-  assert.match(renderedText, /Not verified: Verifier returned 503/);
-  assert.match(renderedText, /Proof fields unavailable/);
-  assert.match(renderedText, /Proof ID\nunavailable/);
-  assert.doesNotMatch(renderedText, /Proof not found/);
-  assert.doesNotMatch(renderedText, /No proof bundle was found/);
-  assert.doesNotMatch(renderedText, /Claimed proof ID/);
-  assert.doesNotMatch(renderedText, /Proof ID\nmissing/);
-}
-
-function rendersVerifierPendingUiWithoutMissingValues() {
-  const { default: VerifierApp } = loadVerifierAppForTest();
-  const renderedText = collectRenderedText(VerifierApp({})).join("\n");
-
-  assert.match(renderedText, /Proof pending/);
-  assert.match(renderedText, /Proof fields pending/);
-  assert.match(renderedText, /Proof ID\npending/);
-  assert.doesNotMatch(renderedText, /Proof ID\nmissing/);
-  assert.doesNotMatch(renderedText, /Claimed proof ID/);
-}
-
-function resetsVerifierResultWhenProofIdClears() {
-  const nativeProof = buildProof();
-  const proof = {
-    ...nativeProof,
-    ...buildRegistration(nativeProof),
-  };
-  const hooks = { effects: [], stateUpdates: [] };
-  const { default: VerifierApp } = loadVerifierAppForTest([buildVerifiedVerifierResponse(proof)], hooks);
-
-  VerifierApp({});
-
-  for (const effect of hooks.effects) {
-    effect();
-  }
-
-  assert.equal(hooks.stateUpdates.length, 1);
-  assert.equal(hooks.stateUpdates[0].status, "missing");
-  assert.equal(hooks.stateUpdates[0].proof, undefined);
-  assert.match(hooks.stateUpdates[0].message, /Open a verifier link/);
-}
-
-function rendersVerifierRouteChangeAsPendingWithoutStaleClaims() {
-  const nativeProof = buildProof();
-  const staleProof = {
-    ...nativeProof,
-    ...buildRegistration(nativeProof),
-  };
-  const { default: VerifierApp } = loadVerifierAppForTest([
-    buildVerifiedVerifierResponse(staleProof),
-  ]);
-  const renderedText = collectRenderedText(VerifierApp({ proofId: "9".repeat(64) })).join("\n");
-
-  assert.match(renderedText, /Proof pending/);
-  assert.match(renderedText, /Proof fields pending/);
-  assert.match(renderedText, /Proof ID\npending/);
-  assert.doesNotMatch(renderedText, /Verified Capture/);
-  assert.doesNotMatch(renderedText, /Reported transaction reference/);
-  assert.doesNotMatch(renderedText, new RegExp(staleProof.proofId));
-}
-
-function rendersProductionVerifierCopyWithSponsorshipBoundary() {
-  const nativeProof = buildProof();
-  const proof = {
-    ...nativeProof,
-    ...buildRegistration(nativeProof),
-  };
-  const { default: VerifierApp } = loadVerifierAppForTest([
-    buildVerifiedVerifierResponse(proof),
-  ]);
-  const renderedText = collectRenderedText(VerifierApp({ proofId: proof.proofId })).join("\n");
-
-  assert.equal(isArgusProductionProof(proof), true);
-  assert.match(renderedText, /Reported transaction reference/);
-  assert.doesNotMatch(renderedText, /Reported Solana transaction/);
-  assert.match(renderedText, /authorized production relayer fee payer/);
-  assert.match(renderedText, /sponsored gas/);
-  assert.match(renderedText, /Evidence level/);
-  assert.match(renderedText, /Level 2 - Native capture evidence/);
-  assert.match(renderedText, /Public key evidence[\s\S]*pending/);
-  assert.match(renderedText, /Trusted device attestation \(Level 4\)[\s\S]*pending/);
-  assert.doesNotMatch(renderedText, /trusted registry configuration and an authorized production relayer\./);
-}
-
 function verifierTrustBoundaryCopyNamesSponsorship() {
   const sources = [
-    readFileSync(new URL("../../../apps/verifier-web/src/App.tsx", import.meta.url), "utf8"),
-    readFileSync(new URL("../../../apps/verifier-web/index.html", import.meta.url), "utf8"),
-    readFileSync(new URL("../../../apps/verifier-web/src/data/proof.ts", import.meta.url), "utf8"),
-    readFileSync(new URL("../../../apps/verifier-web/src/demoVerification.ts", import.meta.url), "utf8"),
+    readFileSync(new URL("../../../apps/marketplace-demo/src/App.tsx", import.meta.url), "utf8"),
+    readFileSync(new URL("../../../apps/marketplace-demo/index.html", import.meta.url), "utf8"),
     readFileSync(new URL("../../../api/relayer/README.md", import.meta.url), "utf8"),
   ];
 
@@ -2976,15 +2709,6 @@ function rejectsLocalDemoStatusWithClaimedPartnerIdMismatch() {
   assert.equal(isArgusLocalDemoProof(proof), false);
 }
 
-function rejectsVerifierPreviewFixtureWithoutProofClaims() {
-  const { loadDemoVerification } = loadVerifierDemoVerificationForTest();
-  const result = loadDemoVerification();
-
-  assert.equal(result.status, "missing");
-  assert.equal(result.proof, undefined);
-  assertNoPartialBundleMatches(result);
-}
-
 function derivesEvidenceLevelFallbackWithoutOverclaimingAttestation() {
   const publicKeyPem = "-----BEGIN PUBLIC KEY-----\nargus-test\n-----END PUBLIC KEY-----";
   const certificatePem = "-----BEGIN CERTIFICATE-----\nargus-test\n-----END CERTIFICATE-----";
@@ -3623,94 +3347,8 @@ function loadArgusProofSummaryForTest() {
   return module.exports;
 }
 
-function loadVerifierAppForTest(initialStateValues = [], hooks = {}) {
-  const source = readFileSync(new URL("../../../apps/verifier-web/src/App.tsx", import.meta.url), "utf8");
-  const output = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      jsx: ts.JsxEmit.React,
-      target: ts.ScriptTarget.ES2020,
-      esModuleInterop: false,
-    },
-  }).outputText;
-  const React = {
-    createElement(type, props, ...children) {
-      return {
-        type,
-        props: {
-          ...(props ?? {}),
-          children,
-        },
-      };
-    },
-  };
-  const module = { exports: {} };
-  let stateIndex = 0;
-  const require = (specifier) => {
-    if (specifier === "react") {
-      return {
-        default: React,
-        useEffect(effect) {
-          hooks.effects?.push(effect);
-        },
-        useState(initialValue) {
-          const fallbackValue = typeof initialValue === "function" ? initialValue() : initialValue;
-          const value = stateIndex < initialStateValues.length ? initialStateValues[stateIndex] : fallbackValue;
-          stateIndex += 1;
-          return [
-            value,
-            (nextValue) => {
-              hooks.stateUpdates?.push(
-                typeof nextValue === "function" ? nextValue(value) : nextValue,
-              );
-            },
-          ];
-        },
-      };
-    }
-    if (specifier === "react-native") {
-      return {
-        SafeAreaView: "SafeAreaView",
-        ScrollView: "ScrollView",
-        StyleSheet: { create: (styles) => styles },
-        Text: "Text",
-        View: "View",
-      };
-    }
-    if (specifier === "../../../packages/argus-rn-sdk/src") {
-      return {
-        configure() {},
-        getArgusEvidenceLevel,
-        getArgusEvidenceLevelLabel,
-        hasArgusPublicKeyCertificateEvidence,
-        isArgusLocalDemoProof,
-        isArgusProductionProof,
-        verifyProof() {
-          throw new Error("verifyProof should not run during static render tests");
-        },
-      };
-    }
-    if (specifier === "../../shared/argusDemoConfig") {
-      return {
-        ARGUS_DEMO_BACKEND_URL: "https://demo.argus.example",
-        ARGUS_DEMO_PARTNER_ID: "recommerce-demo",
-      };
-    }
-    if (specifier === "./demoVerification") {
-      return {
-        loadDemoVerification() {
-          return failedVerificationResult("missing", "Open a verifier link with a proof ID.");
-        },
-      };
-    }
-    throw new Error(`Unexpected test import: ${specifier}`);
-  };
-
-  Function("require", "exports", "module", output)(require, module.exports, module);
-  return module.exports;
-}
-
 function loadMarketplaceDemoAppForTest(initialStateValues = []) {
+  const normalizedInitialStateValues = normalizeMarketplaceInitialStateValues(initialStateValues);
   const source = readFileSync(new URL("../../../apps/marketplace-demo/src/App.tsx", import.meta.url), "utf8");
   const output = ts.transpileModule(source, {
     compilerOptions: {
@@ -3739,7 +3377,11 @@ function loadMarketplaceDemoAppForTest(initialStateValues = []) {
         default: React,
         useEffect() {},
         useState(initialValue) {
-          const value = stateIndex < initialStateValues.length ? initialStateValues[stateIndex] : initialValue;
+          const fallbackValue = typeof initialValue === "function" ? initialValue() : initialValue;
+          const value =
+            stateIndex < normalizedInitialStateValues.length
+              ? normalizedInitialStateValues[stateIndex]
+              : fallbackValue;
           stateIndex += 1;
           return [value, () => {}];
         },
@@ -3748,6 +3390,7 @@ function loadMarketplaceDemoAppForTest(initialStateValues = []) {
     if (specifier === "react-native") {
       return {
         Alert: { alert() {} },
+        Image: "Image",
         Pressable: "Pressable",
         SafeAreaView: "SafeAreaView",
         ScrollView: "ScrollView",
@@ -3774,6 +3417,9 @@ function loadMarketplaceDemoAppForTest(initialStateValues = []) {
         hasArgusPublicKeyCertificateEvidence,
         isArgusLocalDemoProof,
         isArgusProductionProof,
+        registerProofWithRelayer() {
+          throw new Error("registerProofWithRelayer should not run during static render tests");
+        },
       };
     }
     if (specifier === "../../shared/argusDemoConfig") {
@@ -3794,6 +3440,8 @@ function loadMarketplaceDemoAppForTest(initialStateValues = []) {
         listing: {
           condition: "Used",
           id: "argus-listing-test",
+          offerLabel: "Buy It Now or Best Offer",
+          photoUrl: "https://demo.argus.example/item.jpg",
           price: "$1",
           seller: {
             location: "Austin, TX",
@@ -3802,69 +3450,35 @@ function loadMarketplaceDemoAppForTest(initialStateValues = []) {
             score: "10 sales",
           },
           title: "Test listing",
+          shipping: "Free shipping",
         },
       };
     }
     if (specifier === "./demoProof") {
       return { createMarketplaceSimulatorProof };
     }
-    throw new Error(`Unexpected test import: ${specifier}`);
-  };
-
-  Function("require", "exports", "module", output)(require, module.exports, module);
-  return module.exports;
-}
-
-function loadVerifierEntrypointForTest() {
-  const source = readFileSync(new URL("../../../apps/verifier-web/index.js", import.meta.url), "utf8");
-  const output = ts.transpileModule(source, {
-    compilerOptions: {
-      allowJs: true,
-      module: ts.ModuleKind.CommonJS,
-      resolveJsonModule: true,
-      target: ts.ScriptTarget.ES2020,
-    },
-  }).outputText;
-  const React = {
-    createElement(type, props, ...children) {
+    if (specifier === "./localListingStore") {
       return {
-        type,
-        props: {
-          ...(props ?? {}),
-          children,
+        buildListingDraft({ backendMessage, backendStatus, listing, proof, uploadSource }) {
+          return {
+            backendMessage,
+            backendStatus,
+            listing,
+            metadataJson: proof.metadataJson ?? "{}",
+            photoBytesBase64: proof.photoBytesBase64 ?? "",
+            photoUri: listing.photoUrl,
+            proof,
+            savedAt: "2026-05-02T00:00:00.000Z",
+            uploadSource,
+          };
+        },
+        loadLocalListingDraft() {
+          return null;
+        },
+        saveLocalListingDraft(draft) {
+          return draft;
         },
       };
-    },
-  };
-  const module = { exports: {} };
-  const require = (specifier) => {
-    if (specifier === "react") {
-      return {
-        default: React,
-        useEffect() {},
-        useState(initialValue) {
-          return [initialValue, () => {}];
-        },
-      };
-    }
-    if (specifier === "react-native") {
-      return {
-        AppRegistry: { registerComponent() {} },
-        Linking: {
-          addEventListener() {
-            return { remove() {} };
-          },
-          getInitialURL() {
-            return Promise.resolve(null);
-          },
-        },
-      };
-    }
-    if (specifier === "./src/App") {
-      return { default: () => null };
-    }
-    if (specifier === "./app.json") {
-      return { name: "ArgusVerifier" };
     }
     throw new Error(`Unexpected test import: ${specifier}`);
   };
@@ -3873,39 +3487,25 @@ function loadVerifierEntrypointForTest() {
   return module.exports;
 }
 
-function loadVerifierDemoVerificationForTest() {
-  const source = readFileSync(new URL("../../../apps/verifier-web/src/demoVerification.ts", import.meta.url), "utf8");
-  const output = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2020,
-    },
-  }).outputText;
-  const module = { exports: {} };
-  const require = (specifier) => {
-    throw new Error(`Unexpected test import: ${specifier}`);
-  };
+function normalizeMarketplaceInitialStateValues(initialStateValues) {
+  const firstValue = initialStateValues[0];
 
-  Function("require", "exports", "module", output)(require, module.exports, module);
-  return module.exports;
-}
-
-function withGlobalLocation(location, callback) {
-  const originalLocationDescriptor = Object.getOwnPropertyDescriptor(globalThis, "location");
-  Object.defineProperty(globalThis, "location", {
-    configurable: true,
-    value: location,
-  });
-
-  try {
-    callback();
-  } finally {
-    if (originalLocationDescriptor) {
-      Object.defineProperty(globalThis, "location", originalLocationDescriptor);
-    } else {
-      delete globalThis.location;
-    }
+  if (!firstValue || typeof firstValue !== "object" || !("proofId" in firstValue)) {
+    return initialStateValues;
   }
+
+  const fallbackMessage = typeof initialStateValues[1] === "string" ? initialStateValues[1] : null;
+  const isSimulatorFallback = initialStateValues[2] === true;
+
+  return [
+    null,
+    firstValue,
+    "selling",
+    fallbackMessage,
+    isSimulatorFallback ? "local_only" : "registered",
+    false,
+    isSimulatorFallback,
+  ];
 }
 
 function collectRenderedText(node) {

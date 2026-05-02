@@ -7,10 +7,9 @@ export const ARGUS_AUTHORIZED_RELAYER = "Ao3Vi2HeQHWyyPDA52rqVLYv8nt7pvAVQtPB1qw
 export const ARGUS_LOCAL_DEMO_RELAYER = "ArgusLocalDemoRelayer111111111111111111111111";
 const ARGUS_MANIFEST_SCHEMA_VERSION = "argus.manifest.v1";
 const ARGUS_DEFAULT_VERIFIER_ORIGIN = "https://verify.argus.dev";
-const LOCAL_DEMO_VERIFIER_QUERY_PREFIX = "../verifier-web/index.html?proofId=";
 const MAX_CANONICAL_MANIFEST_JSON_BYTES = 4 * 1024;
 const MAX_METADATA_JSON_BYTES = 64 * 1024;
-const MAX_EVIDENCE_JSON_BYTES = 16 * 1024;
+const MAX_EVIDENCE_JSON_BYTES = 64 * 1024;
 const MAX_NATIVE_CAPTURE_PHOTO_BYTES = 20 * 1024 * 1024;
 const MAX_NATIVE_CAPTURE_PHOTO_BASE64_LENGTH = Math.ceil(MAX_NATIVE_CAPTURE_PHOTO_BYTES / 3) * 4;
 const MAX_CAMERA_EVIDENCE_DELAY_MS = 5_000;
@@ -331,17 +330,11 @@ export function isSafeArgusVerificationUrl(value?: string): value is string {
     return false;
   }
 
-  if (hasRawPathTraversalSegments(trimmed) && !isExactLocalDemoVerifierQueryUrl(trimmed)) {
+  if (hasRawPathTraversalSegments(trimmed)) {
     return false;
   }
 
-  const isExactLocalDemoQuery = isExactLocalDemoVerifierQueryUrl(trimmed);
-
   if (trimmed.startsWith("/") || trimmed.startsWith("./") || trimmed.startsWith("../")) {
-    if (isExactLocalDemoQuery) {
-      return true;
-    }
-
     try {
       const parsed = new URL(trimmed, "https://argus.local");
       const localProofId = parsed.pathname.startsWith("/proof/")
@@ -406,14 +399,6 @@ function hasBoundedText(value: string | undefined, maxUtf8Bytes: number): value 
 
 function isNonZeroHex32(value?: string): value is string {
   return typeof value === "string" && /^[0-9a-f]{64}$/.test(value) && !/^0{64}$/.test(value);
-}
-
-function isExactLocalDemoVerifierQueryUrl(value: string): boolean {
-  if (!value.startsWith(LOCAL_DEMO_VERIFIER_QUERY_PREFIX)) {
-    return false;
-  }
-
-  return isNonZeroHex32(value.slice(LOCAL_DEMO_VERIFIER_QUERY_PREFIX.length));
 }
 
 function proofIdIsBoundToVerificationUrl(value: string, proof?: ArgusProof | null): boolean {
@@ -485,12 +470,7 @@ function localDemoProofUrlMatches(parsed: URL, proofId: string, rawValue: string
         ((parsed.protocol === "http:" || parsed.protocol === "https:") && isLoopbackHost(parsed.hostname))) &&
         parsed.pathname === `/proof/${proofId}` &&
         rawLocalDemoProofPathMatches(rawValue, proofId)));
-  const proofIdInQuery =
-    parsed.origin === "https://argus.local" &&
-    parsed.pathname === "/verifier-web/index.html" &&
-    parsed.search === `?proofId=${proofId}` &&
-    rawValue === `../verifier-web/index.html?proofId=${proofId}`;
-  return parsed.hash === "" && (proofIdInPath || proofIdInQuery);
+  return parsed.hash === "" && proofIdInPath;
 }
 
 function rawLocalDemoProofPathMatches(value: string, proofId: string): boolean {

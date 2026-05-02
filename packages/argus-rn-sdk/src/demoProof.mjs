@@ -5,7 +5,7 @@ const ARGUS_LOCAL_DEMO_RELAYER = "ArgusLocalDemoRelayer111111111111111111111111"
 const ARGUS_MANIFEST_SCHEMA_VERSION = "argus.manifest.v1";
 const MAX_CANONICAL_MANIFEST_JSON_BYTES = 4 * 1024;
 const MAX_METADATA_JSON_BYTES = 64 * 1024;
-const MAX_EVIDENCE_JSON_BYTES = 16 * 1024;
+const MAX_EVIDENCE_JSON_BYTES = 64 * 1024;
 const MAX_REPORTED_TRANSACTION_REFERENCE_BYTES = 512;
 const MAX_NATIVE_CAPTURE_PHOTO_BYTES = 20 * 1024 * 1024;
 const MAX_NATIVE_CAPTURE_PHOTO_BASE64_LENGTH = Math.ceil(MAX_NATIVE_CAPTURE_PHOTO_BYTES / 3) * 4;
@@ -79,7 +79,7 @@ export async function createDemoCaptureProof(options) {
     condition: options.metadata.condition,
     listingId: options.metadata.listingId,
     listingTitle: options.metadata.title,
-    source: "argus-marketplace-demo",
+    source: "ebay_argus",
   });
   const cameraEvidenceJson = stableStringify(buildDemoCameraEvidence(capturedAtMs));
   const deviceIntegrityJson = stableStringify(buildDemoDeviceIntegrity(appIdentityHash));
@@ -136,7 +136,7 @@ export async function createDemoCaptureProof(options) {
     capturedAt,
     partnerId: options.partnerId,
     useCase: options.useCase,
-    verificationUrl: `../verifier-web/index.html?proofId=${proofId}`,
+    verificationUrl: `argus://verify/local-simulator/${proofId}`,
     integrityLevel: "demo",
     deviceEvidenceSummary: {
       cameraMetadata: true,
@@ -247,7 +247,7 @@ export async function verifyDemoProof(proofId) {
     proof.sponsoredGas === false &&
     proof.proofRecord?.relayer === ARGUS_LOCAL_DEMO_RELAYER &&
     proof.proofRecord?.relayerAuthorized === false;
-  const verificationUrlMatches = proof.verificationUrl === `../verifier-web/index.html?proofId=${proofId}`;
+  const verificationUrlMatches = proof.verificationUrl === `argus://verify/local-simulator/${proofId}`;
   const bundleMatches =
     canonicalManifestMatches &&
     manifestHashMatches &&
@@ -468,7 +468,7 @@ function hasMotionEvidence(deviceIntegrity) {
 // kr: saveProof는 browser demo에서 marketplace와 verifier가 같은 proof를 읽게 합니다.
 // en: saveProof lets the marketplace and verifier pages read the same proof in the browser demo.
 export function saveProof(proof) {
-  if (!globalThis.localStorage) {
+  if (typeof globalThis.localStorage?.setItem !== "function") {
     return;
   }
 
@@ -478,7 +478,7 @@ export function saveProof(proof) {
 // kr: loadProof는 verifier가 proofId로 저장된 증명을 조회하는 함수입니다.
 // en: loadProof fetches a saved proof by proofId for the verifier.
 export function loadProof(proofId) {
-  if (!globalThis.localStorage || !proofId) {
+  if (typeof globalThis.localStorage?.getItem !== "function" || !proofId) {
     return null;
   }
 
