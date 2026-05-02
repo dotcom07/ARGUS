@@ -4,6 +4,7 @@ import { X509Certificate, createHash, createPublicKey, createSign, generateKeyPa
 import {
   __androidEvidencePolicyTestHooks,
   buildAndroidKeystoreSignedPayloadJson,
+  validateAndroidEvidenceLevel,
 } from "./androidEvidencePolicy.mjs";
 import { openRelayerCaptureSession } from "./openCaptureSession.mjs";
 import {
@@ -1770,9 +1771,17 @@ async function acceptsLevel3HardwareFallbackEvidence() {
   authorizeProofSession(level3Proof);
 
   const result = await registerProof(buildRequest(level3Proof));
+  const decision = validateAndroidEvidenceLevel({
+    deviceIntegrity: JSON.parse(level3Proof.deviceIntegrityJson),
+    manifest: level3Proof.manifest,
+    request: buildRequest(level3Proof),
+  });
 
   assert.equal(result.proofId, level3Proof.proofId);
   assert.equal(result.proofRecord.proofLevel, "app_capture");
+  assert.equal(decision.acceptedLevel, 3);
+  assert.equal(decision.evidenceLevel, "level_3_keystore_signature");
+  assert.equal(decision.fallbackReason, "android_key_attestation_unavailable");
 }
 
 async function rejectsLevel3KeystoreSignatureMismatch() {
@@ -1803,9 +1812,21 @@ async function acceptsLevel4HardwareAttestationEvidence() {
   authorizeProofSession(level4Proof);
 
   const result = await registerProof(buildRequest(level4Proof));
+  const decision = validateAndroidEvidenceLevel({
+    deviceIntegrity: JSON.parse(level4Proof.deviceIntegrityJson),
+    manifest: level4Proof.manifest,
+    request: buildRequest(level4Proof),
+  });
 
   assert.equal(result.proofId, level4Proof.proofId);
   assert.equal(result.proofRecord.proofLevel, "app_capture");
+  assert.equal(decision.acceptedLevel, 4);
+  assert.equal(decision.evidenceLevel, "level_4_hardware_attestation");
+  assert.equal(decision.hardwareSecurityClass, "trusted_environment");
+  assert.equal(
+    decision.trustedRootFingerprintSha256,
+    certificateSha256(LEVEL4_ATTESTATION_CERTIFICATE_PEM),
+  );
 }
 
 async function rejectsLevel4WithoutTrustedRoot() {

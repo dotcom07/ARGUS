@@ -135,6 +135,7 @@ internal object ArgusKeystoreEvidence {
         preferStrongBox: Boolean,
     ): Map<String, Any>? {
         return try {
+            val requestedSecurityLevel = if (preferStrongBox) "strongbox" else "tee_or_keystore"
             val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
             val alias = "argus_proof_${if (preferStrongBox) "strongbox" else "keystore"}_${sha256Hex(bindingData.toByteArray()).take(32)}"
             if (keyStore.containsAlias(alias)) {
@@ -194,6 +195,7 @@ internal object ArgusKeystoreEvidence {
                 "publicKeySpkiBase64" to Base64.getEncoder().encodeToString(publicKeyBytes),
                 "signatureBase64" to signatureBase64,
                 "signedPayloadJson" to bindingData,
+                "requestedSecurityLevel" to requestedSecurityLevel,
                 "securityLevel" to if (hasAttestationChain) {
                     "keystore_signature_attestation_material_root_unverified"
                 } else "keystore_signature",
@@ -210,6 +212,7 @@ internal object ArgusKeystoreEvidence {
                     "certificateChainSha256" to certificateChainSha256,
                     "hardwareBacked" to hasAttestationChain,
                     "publicKeyPem" to publicKeyPem,
+                    "requestedSecurityLevel" to requestedSecurityLevel,
                     "securityLevel" to if (hasAttestationChain) "hardware_chain_material_root_unverified" else "unverified",
                     "fallbackReason" to fallbackReason,
                 ),

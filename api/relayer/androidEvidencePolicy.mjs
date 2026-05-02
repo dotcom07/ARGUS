@@ -10,20 +10,31 @@ const ANDROID_ATTESTATION_ROOT_SHA256_ENV = "ARGUS_ANDROID_ATTESTATION_ROOT_SHA2
 const ANDROID_KEY_ATTESTATION_EXTENSION_OID = "1.3.6.1.4.1.11129.2.1.17";
 const ANDROID_SECURITY_LEVEL_TRUSTED_ENVIRONMENT = 1;
 const ANDROID_SECURITY_LEVEL_STRONGBOX = 2;
+const ANDROID_SECURITY_LEVEL_NAMES = new Map([
+  [ANDROID_SECURITY_LEVEL_TRUSTED_ENVIRONMENT, "trusted_environment"],
+  [ANDROID_SECURITY_LEVEL_STRONGBOX, "strongbox"],
+]);
 
 export function validateAndroidEvidenceLevel({ deviceIntegrity, manifest, request }) {
   const level = deviceIntegrity.androidEvidenceLevel;
   if (level === undefined) {
-    return;
+    return {
+      acceptedLevel: undefined,
+      evidenceLevel: "unspecified",
+    };
   }
 
   if (!Number.isSafeInteger(level) || !SUPPORTED_ANDROID_EVIDENCE_LEVELS.has(level)) {
     throw new Error("androidEvidenceLevel must be 2, 3, or 4");
   }
 
-  validateHardwareFallback(deviceIntegrity, level);
+  const fallback = validateHardwareFallback(deviceIntegrity, level);
   if (level === 2) {
-    return;
+    return {
+      acceptedLevel: 2,
+      evidenceLevel: "level_2_native_capture",
+      fallbackReason: fallback?.reason,
+    };
   }
 
   const keystoreSignature = validateKeystoreSignatureShape(deviceIntegrity.keystoreSignature);
@@ -46,8 +57,26 @@ export function validateAndroidEvidenceLevel({ deviceIntegrity, manifest, reques
   verifyKeystoreSignature(keystoreSignature);
 
   if (level === 4) {
-    validateHardwareAttestation(deviceIntegrity.hardwareAttestation, keystoreSignature, request);
+    const hardwareAttestation = validateHardwareAttestation(
+      deviceIntegrity.hardwareAttestation,
+      keystoreSignature,
+      request,
+    );
+    return {
+      acceptedLevel: 4,
+      evidenceLevel: "level_4_hardware_attestation",
+      hardwareSecurityClass: hardwareAttestation.hardwareSecurityClass,
+      attestationSecurityLevel: hardwareAttestation.attestationSecurityLevel,
+      keymasterSecurityLevel: hardwareAttestation.keymasterSecurityLevel,
+      trustedRootFingerprintSha256: hardwareAttestation.trustedRootFingerprintSha256,
+    };
   }
+
+  return {
+    acceptedLevel: 3,
+    evidenceLevel: "level_3_keystore_signature",
+    fallbackReason: fallback?.reason,
+  };
 }
 
 export function buildAndroidKeystoreSignedPayloadJson({ deviceIntegrity, manifest, request }) {
@@ -143,7 +172,7 @@ function validateHardwareAttestation(hardwareAttestation, keystoreSignature, req
     throw new Error("Level 4 Android evidence requires hardware-backed attestation material");
   }
 
-  validateHardwareAttestationCertificateChain(
+  return validateHardwareAttestationCertificateChain(
     hardwareAttestation.certificateChainPem,
     keystoreSignature.publicKeyPem,
     request.sessionNonce,
@@ -176,7 +205,14 @@ function validateHardwareAttestationCertificateChain(certificateChainPem, public
     throw new Error("Level 4 Android attestation root is not trusted");
   }
 
-  validateAndroidKeyAttestationExtension(leafCertificate.raw, expectedChallengeHex);
+  const attestationExtension = validateAndroidKeyAttestationExtension(
+    leafCertificate.raw,
+    expectedChallengeHex,
+  );
+  return {
+    ...attestationExtension,
+    trustedRootFingerprintSha256: sha256Hex(rootCertificate.raw),
+  };
 }
 
 function validateCertificateChainSignatures(certificates) {
@@ -251,6 +287,15 @@ function validateAndroidKeyAttestationExtension(certificateDer, expectedChalleng
   ) {
     throw new Error("Level 4 Android evidence requires hardware-backed Android key attestation security level");
   }
+
+  return {
+    attestationSecurityLevel: androidSecurityLevelName(attestationSecurityLevel),
+    keymasterSecurityLevel: androidSecurityLevelName(keymasterSecurityLevel),
+    hardwareSecurityClass: hardwareSecurityClass(
+      attestationSecurityLevel,
+      keymasterSecurityLevel,
+    ),
+  };
 }
 
 function findX509Extension(certificateDer, targetOid) {
@@ -428,14 +473,29 @@ function isHardwareAndroidSecurityLevel(value) {
   );
 }
 
+function androidSecurityLevelName(value) {
+  return ANDROID_SECURITY_LEVEL_NAMES.get(value) ?? "unknown";
+}
+
+function hardwareSecurityClass(attestationSecurityLevel, keymasterSecurityLevel) {
+  if (
+    attestationSecurityLevel === ANDROID_SECURITY_LEVEL_STRONGBOX &&
+    keymasterSecurityLevel === ANDROID_SECURITY_LEVEL_STRONGBOX
+  ) {
+    return "strongbox";
+  }
+
+  return "trusted_environment";
+}
+
 function validateHardwareFallback(deviceIntegrity, level) {
   const { hardwareAttestation } = deviceIntegrity;
   if (!hardwareAttestation || typeof hardwareAttestation !== "object" || Array.isArray(hardwareAttestation)) {
-    return;
+    return null;
   }
 
   if (hardwareAttestation.supported !== false) {
-    return;
+    return null;
   }
 
   if (level === 4) {
@@ -445,6 +505,11 @@ function validateHardwareFallback(deviceIntegrity, level) {
   if (hardwareAttestation.fallbackLevel !== level || !isNonEmptyString(hardwareAttestation.reason)) {
     throw new Error("hardware attestation fallback must explicitly match androidEvidenceLevel");
   }
+
+  return {
+    fallbackLevel: hardwareAttestation.fallbackLevel,
+    reason: hardwareAttestation.reason,
+  };
 }
 
 function unsignedDeviceIntegrityHash(deviceIntegrity) {

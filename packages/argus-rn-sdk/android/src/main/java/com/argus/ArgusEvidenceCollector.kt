@@ -76,6 +76,10 @@ class ArgusEvidenceCollector(private val context: Context) {
             emptyList()
         }
         val publicKeyPem = if (level3VerifierEvidence) keystoreEvidence["publicKeyPem"] as? String ?: "" else ""
+        val requestedSecurityLevel =
+            (hardwareAttestationInput?.get("requestedSecurityLevel") as? String)?.takeIf { it.trim().isNotEmpty() }
+                ?: (keystoreEvidence["requestedSecurityLevel"] as? String)?.takeIf { it.trim().isNotEmpty() }
+                ?: "unknown"
         val attestationChallengeHex =
             (hardwareAttestationInput?.get("attestationChallengeHex") as? String)?.takeIf { it.trim().isNotEmpty() }
                 ?: (attestation?.get("attestationChallengeHex") as? String)?.takeIf { it.trim().isNotEmpty() }
@@ -91,6 +95,7 @@ class ArgusEvidenceCollector(private val context: Context) {
                 "reason" to "attestation_root_validation_required",
                 "attestationChallengeHex" to attestationChallengeHex,
                 "publicKeyPem" to publicKeyPem,
+                "requestedSecurityLevel" to requestedSecurityLevel,
                 "certificateChainBase64" to attestationChainBase64,
                 "certificateChainPem" to attestationChainPem,
             )
@@ -99,6 +104,7 @@ class ArgusEvidenceCollector(private val context: Context) {
                 "supported" to false,
                 "fallbackLevel" to resolvedLevel,
                 "reason" to hardwareFallbackReason(),
+                "requestedSecurityLevel" to requestedSecurityLevel,
             )
         }
         val keystoreSignatureEvidence: Any = if (level3VerifierEvidence) keystoreEvidence else false
@@ -117,6 +123,7 @@ class ArgusEvidenceCollector(private val context: Context) {
             "level3KeystoreSignature" to level3VerifierEvidence,
             "level4AttestationMaterial" to level4MaterialEvidence,
             "level4HardwareAttestation" to false,
+            "keystoreRequestedSecurityLevel" to requestedSecurityLevel,
             "keystorePublicKeyPem" to publicKeyPem,
             "keystorePublicKeySpkiBase64" to if (level3VerifierEvidence) {
                 keystoreEvidence["publicKeySpkiBase64"] ?: ""
