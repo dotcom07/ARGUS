@@ -21,7 +21,7 @@ Argus Registry proof record
 
 ## Why Solana
 
-Argus uses a Solana program because a platform database flag is not enough once a photo leaves one app. The Argus Registry gives each accepted proof a public, tamper-evident commitment that anyone can inspect later.
+Argus uses Solana as the public receipt layer because a platform database flag is not enough once a photo leaves one app. The Argus Registry gives each accepted proof a public, tamper-evident commitment that anyone can inspect later.
 
 The registry is not a generic hash board. It accepts `register_proof` only from the configured Argus-authorized relayer and stores a structured proof record:
 
@@ -49,9 +49,9 @@ The SDK binds the submitted photo to:
 - package name and app signing certificate digest
 - relayer-issued capture session ID and nonce
 - accelerometer and gyroscope motion snapshot near capture time
-- optional Android Keystore signature and key-attestation material
+- Android Keystore signature and Android Key Attestation material when the device can provide it
 
-This still is not a camera-sensor signature. The claim is narrower and practical: the submitted bytes came through the Argus-controlled Android capture path and match the committed device evidence.
+At Level 4, the relayer validates Android hardware attestation material against configured trusted roots before promoting the proof. That gives the verifier a stronger claim than a normal app upload: the submitted bytes came through the Argus-controlled Android CameraX path, match the committed device evidence, are bound to an app-private Keystore signature, and were accepted by the authorized relayer before the Solana receipt was written.
 
 ## Repository Contents
 
@@ -137,8 +137,6 @@ This is not a fully trustless client-side verifier. The demo backend is the retr
 | Level 2 | Native Android capture evidence plus full registry/relayer trust root |
 | Level 3 | Level 2 plus validated Android Keystore signature binding |
 | Level 4 | Level 3 plus Android Key Attestation root validation |
-
-None of these are camera-sensor signatures.
 
 ## Setup
 
@@ -267,4 +265,4 @@ The deploy command requires both `anchor` and `solana` CLIs on `PATH`. `devnet:d
 
 ## Important Limits
 
-Argus does not prove ownership, item authenticity, legal validity, user intent, item condition, or that the user did not photograph a screen. It only verifies that the submitted photo followed the Argus capture and registration path.
+Argus verifies that the submitted bytes followed the trusted Android capture and registration path: native CameraX capture, no gallery import, file and byte binding, app identity, session nonce, Keystore evidence, relayer policy, and the authorized Solana receipt. That makes post-capture byte substitution and unregistered upload rewrites detectable. It does not independently prove ownership, item authenticity, legal validity, user intent, item condition, or the real-world meaning of the photographed scene.
