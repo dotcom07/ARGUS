@@ -22,6 +22,13 @@ const server = http.createServer(async (request, response) => {
     await routeRequest(request, response);
   } catch (error) {
     const status = isClientError(error) ? 400 : 500;
+    console.error("[Argus relayer] request failed", {
+      status,
+      method: request.method,
+      url: request.url,
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     sendJson(response, status, {
       error: status === 400 ? error.message : "Argus relayer request failed",
     });
