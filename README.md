@@ -8,16 +8,7 @@ It is not an AI-image detector and it does not prove that a physical scene is tr
 
 ## How It Works
 
-```mermaid
-flowchart LR
-  A[Partner React Native app] --> B[Argus RN SDK]
-  B --> C[Kotlin CameraX capture]
-  C --> D[Android evidence bundle]
-  D --> E[Proof manifest]
-  E --> F[Argus relayer]
-  F --> G[Argus Registry on Solana]
-  G --> H[Verifier]
-```
+<img src="./images/Argus_Tech/Technical%2002/Architecture%20Picture.png" alt="Argus architecture zones" width="900">
 
 The verifier checks the whole bundle, not just whether an image hash exists onchain:
 
@@ -85,7 +76,6 @@ Curated slide exports live in [`images/Argus_IR`](./images/Argus_IR) and [`image
 | --- | --- |
 | <img src="./images/Argus_IR/IR%2004/Product%20Flow.png" alt="Argus product flow" width="420"> | Shows the core product route: require evidence, capture natively, build a proof bundle, pass the relayer gate, then let the platform act. |
 | <img src="./images/Argus_IR/IR%2005/Demo%20Wedge.png" alt="Argus marketplace demo wedge" width="420"> | Shows the marketplace wedge used by the demo: listing details, SDK capture, and a verified capture receipt inside the same workflow. |
-| <img src="./images/Argus_Tech/Technical%2002/Architecture%20Picture.png" alt="Argus architecture zones" width="420"> | Maps one proof path across the partner app, RN SDK, Android native layer, proof rules, relayer, Solana registry, and verifier. |
 | <img src="./images/Argus_Tech/Technical%2003/Android%20Capture%20Boundary.png" alt="Argus Android capture boundary" width="420"> | Clarifies that Argus is an SDK trust layer inside existing apps, not a standalone camera app or gallery-upload wrapper. |
 | <img src="./images/Argus_Tech/Technical%2007/Verifier%20And%20Evidence%20Levels.png" alt="Argus verifier and evidence levels" width="420"> | Shows the verifier path: recompute the bundle, check the Solana receipt, match policy, then decide whether the UI should trust the photo. |
 
