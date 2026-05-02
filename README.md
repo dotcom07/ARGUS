@@ -1,6 +1,6 @@
 # Argus
 
-![Argus banner](./x_images/Argus_banner.png)
+![Argus banner](./images/Argus_banner.png)
 
 Argus is a React Native SDK and Solana registry prototype for verifying that a submitted photo came through an Argus-controlled in-app capture flow.
 
@@ -75,7 +75,19 @@ This still is not a camera-sensor signature. The claim is narrower and practical
 | [`programs/argus-registry`](./programs/argus-registry) | Anchor program for authorized proof-record registration |
 | [`apps/marketplace-demo`](./apps/marketplace-demo) | `ebay_argus` React Native app and browser preview for marketplace capture, listing, product, and proof-status demo flows |
 | [`scripts`](./scripts) | Local demo, test, and preview helpers |
-| [`x_images`](./x_images) | Logo and banner assets |
+| [`images`](./images) | Logo, banner, and selected IR/technical slide exports |
+
+## Selected Deck Materials
+
+Curated slide exports live in [`images/Argus_IR`](./images/Argus_IR) and [`images/Argus_Tech`](./images/Argus_Tech). This README only embeds the slides that best explain the product and trust model.
+
+| Material | Why It Matters |
+| --- | --- |
+| <img src="./images/Argus_IR/IR%2004/Product%20Flow.png" alt="Argus product flow" width="420"> | Shows the core product route: require evidence, capture natively, build a proof bundle, pass the relayer gate, then let the platform act. |
+| <img src="./images/Argus_IR/IR%2005/Demo%20Wedge.png" alt="Argus marketplace demo wedge" width="420"> | Shows the marketplace wedge used by the demo: listing details, SDK capture, and a verified capture receipt inside the same workflow. |
+| <img src="./images/Argus_Tech/Technical%2002/Architecture%20Picture.png" alt="Argus architecture zones" width="420"> | Maps one proof path across the partner app, RN SDK, Android native layer, proof rules, relayer, Solana registry, and verifier. |
+| <img src="./images/Argus_Tech/Technical%2003/Android%20Capture%20Boundary.png" alt="Argus Android capture boundary" width="420"> | Clarifies that Argus is an SDK trust layer inside existing apps, not a standalone camera app or gallery-upload wrapper. |
+| <img src="./images/Argus_Tech/Technical%2007/Verifier%20And%20Evidence%20Levels.png" alt="Argus verifier and evidence levels" width="420"> | Shows the verifier path: recompute the bundle, check the Solana receipt, match policy, then decide whether the UI should trust the photo. |
 
 ## Current Status
 
