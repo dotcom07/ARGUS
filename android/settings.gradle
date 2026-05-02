@@ -1,0 +1,9 @@
+pluginManagement { includeBuild("../node_modules/@react-native/gradle-plugin") }
+plugins { id("com.facebook.react.settings") }
+extensions.configure(com.facebook.react.ReactSettingsExtension) { ex -> ex.autolinkLibrariesFromCommand() }
+
+rootProject.name = "ArgusHost"
+include ":app"
+include ":argus-rn-sdk"
+project(":argus-rn-sdk").projectDir = new File(rootProject.projectDir, "../packages/argus-rn-sdk/android")
+includeBuild("../node_modules/@react-native/gradle-plugin")

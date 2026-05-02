@@ -1,0 +1,9 @@
+[programs.localnet]
+argus_registry = "Fg6PaFpoGXkYsidMpWxTWqgPfwT12r7zkbJ3Fqk7xRVE"
+
+[programs.devnet]
+argus_registry = "Fg6PaFpoGXkYsidMpWxTWqgPfwT12r7zkbJ3Fqk7xRVE"
+
+[provider]
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"

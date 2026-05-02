@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Argus Proof Verifier</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="verifier-header">
+      <a class="brand" href="../marketplace-demo/index.html" aria-label="Back to demo example">
+        <img src="../../x_images/Argus_logo.png" alt="" />
+        <span>Argus Verify</span>
+      </a>
+      <a class="back-link" href="../marketplace-demo/index.html">Demo example</a>
+    </header>
+
+    <main class="verify-shell">
+      <section class="status-panel">
+        <div id="statusMark" class="status-mark pending">...</div>
+        <div>
+          <p class="eyebrow">Capture verification report</p>
+          <h1 id="statusTitle">Proof pending</h1>
+          <p id="statusCopy">Open a verifier link with a proof ID to check the proof bundle.</p>
+        </div>
+      </section>
+
+      <section class="proof-layout">
+        <article class="proof-card">
+          <h2 id="proofCardTitle">Proof fields pending</h2>
+          <dl class="hash-list">
+            <div>
+              <dt id="proofIdLabel">Proof ID</dt>
+              <dd id="proofId">-</dd>
+            </div>
+            <div>
+              <dt id="manifestHashLabel">Manifest hash</dt>
+              <dd id="manifestHash">-</dd>
+            </div>
+            <div>
+              <dt id="imageHashLabel">Image hash commitment</dt>
+              <dd id="imageHash">-</dd>
+            </div>
+            <div>
+              <dt id="solanaTxLabel">Transaction reference</dt>
+              <dd id="solanaTx">-</dd>
+            </div>
+            <div>
+              <dt id="relayerLabel">Relayer</dt>
+              <dd id="relayer">-</dd>
+            </div>
+            <div>
+              <dt id="registryProgramLabel">Registry program</dt>
+              <dd id="registryProgram">-</dd>
+            </div>
+            <div>
+              <dt id="proofLevelLabel">Evidence level</dt>
+              <dd id="proofLevel">-</dd>
+            </div>
+            <div>
+              <dt id="recordStatusLabel">Record status</dt>
+              <dd id="recordStatus">-</dd>
+            </div>
+          </dl>
+        </article>
+
+        <article class="proof-card">
+          <h2>Capture evidence summary</h2>
+          <div class="evidence-grid">
+            <div id="cameraEvidence" class="evidence-item">Camera evidence</div>
+            <div id="motionEvidence" class="evidence-item">Motion snapshot</div>
+            <div id="appEvidence" class="evidence-item">App identity hash</div>
+            <div id="keystoreEvidence" class="evidence-item muted">Public key evidence</div>
+            <div id="level4Evidence" class="evidence-item muted">Trusted device attestation (Level 4)</div>
+          </div>
+        </article>
+
+        <article class="proof-card wide">
+          <h2>Proof boundary</h2>
+          <div class="boundary-grid">
+            <div>
+              <h3>Production Argus verifies</h3>
+              <ul>
+                <li>Photo bytes pass the structural JPEG-like byte gate and match the manifest image commitment.</li>
+                <li>Canonical manifest hash matches a production-pinned Argus Registry commitment.</li>
+                <li>Active registry record matches trusted registry configuration, authorized production relayer fee payer, sponsored gas, and fee-payer binding.</li>
+                <li>Partner/use-case/app identity policy, committed device-evidence policy, and active status are acceptable for capture-provenance verification.</li>
+                <li>Level 3 requires validated Keystore public key/signature evidence. Level 4 requires trusted-root hardware attestation; otherwise show Level 3/2 fallback.</li>
+                <li>Device-side evidence was committed without raw image storage on-chain.</li>
+              </ul>
+            </div>
+            <div>
+              <h3>Argus does not verify</h3>
+              <ul>
+                <li>Physical scene truth.</li>
+                <li>Ownership, condition, or legal validity of the submitted subject.</li>
+                <li>Image forensics or AI detection for images submitted outside Argus capture.</li>
+                <li>Whether the camera photographed a screen.</li>
+                <li>Complete prevention of rooted, emulated, or mock-camera environments.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

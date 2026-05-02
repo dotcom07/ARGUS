@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Argus Recommerce Demo</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="market-header">
+      <a class="brand" href="./index.html" aria-label="Argus recommerce home">
+        <img src="../../x_images/Argus_logo.png" alt="" />
+        <span>re:market</span>
+      </a>
+      <form class="search-bar">
+        <select aria-label="Category">
+          <option>All Categories</option>
+          <option>Cameras</option>
+          <option>Electronics</option>
+          <option>Collectibles</option>
+        </select>
+        <input value="vintage camera capture verification" aria-label="Search" />
+        <button type="button">Search</button>
+      </form>
+      <nav class="account-nav" aria-label="Account">
+        <a href="#">Sell</a>
+        <a href="#">Watchlist</a>
+        <a href="#">Cart</a>
+      </nav>
+    </header>
+
+    <nav class="category-strip" aria-label="Marketplace categories">
+      <a href="#">Saved</a>
+      <a href="#">Electronics</a>
+      <a href="#">Cameras</a>
+      <a href="#">Sneakers</a>
+      <a href="#">Luxury</a>
+      <a href="#">Local pickup</a>
+    </nav>
+
+    <main class="listing-shell">
+      <section class="gallery-panel" aria-label="Listing photos">
+        <div class="photo-stage">
+          <img src="./assets/listing-camera.svg" alt="Vintage film camera listing" />
+          <div id="photoBadge" class="photo-badge pending">Capture pending</div>
+        </div>
+        <div class="thumb-row" aria-label="Photo thumbnails">
+          <button class="thumb active" type="button"><img src="./assets/listing-camera.svg" alt="" /></button>
+          <button class="thumb" type="button"><img src="../../x_images/Argus.png" alt="" /></button>
+          <button class="thumb placeholder" type="button">+</button>
+        </div>
+      </section>
+
+      <section class="listing-main" aria-label="Listing details">
+        <p class="eyebrow">Pre-owned · Local seller · Ships from Austin, TX</p>
+        <h1 id="listingTitle">Hasselblad 500C/M Medium Format Film Camera Kit</h1>
+        <div class="trust-row">
+          <span class="condition-pill">Used · Excellent</span>
+          <span id="verifiedPill" class="verified-pill muted">Local demo preview pending</span>
+        </div>
+        <div class="price-row">
+          <strong>$1,480.00</strong>
+          <span>or Best Offer</span>
+        </div>
+        <div class="shipping-line">Free 3 day shipping · Buyer protection eligible</div>
+
+        <div class="actions-row">
+          <button class="primary-action" type="button">Buy It Now</button>
+          <button class="secondary-action" type="button">Add to cart</button>
+          <button class="secondary-action" type="button">Make offer</button>
+        </div>
+
+        <section class="argus-panel" aria-label="Argus capture panel">
+          <div>
+            <h2>Listing photo provenance</h2>
+            <p>Example capture-provenance flow for a marketplace listing photo.</p>
+          </div>
+          <button id="captureButton" class="capture-action" type="button">Create local demo preview</button>
+          <dl class="proof-grid">
+            <div>
+              <dt>Manifest hash</dt>
+              <dd id="manifestHash">Waiting for capture</dd>
+            </div>
+            <div>
+              <dt>Simulated preview transaction reference</dt>
+              <dd id="solanaTx">Waiting for local demo preview</dd>
+            </div>
+            <div>
+              <dt>Preview evidence level</dt>
+              <dd id="evidenceLevel">Level 1 - Demo preview</dd>
+            </div>
+            <div>
+              <dt>Evidence</dt>
+              <dd id="evidenceSummary">Local demo preview commitments: simulated camera, motion, app identity</dd>
+            </div>
+          </dl>
+          <a id="verifierLink" class="verifier-link disabled" aria-disabled="true" tabindex="-1">Verifier pending</a>
+        </section>
+      </section>
+
+      <aside class="seller-panel" aria-label="Seller information">
+        <div class="seller-card">
+          <h2>Seller information</h2>
+          <div class="seller-name">FrontierCameraCo</div>
+          <div class="seller-score">99.2% positive · 1,842 sales</div>
+          <div class="seller-meter">
+            <span style="width: 92%"></span>
+          </div>
+          <button type="button">Contact seller</button>
+        </div>
+
+        <div class="policy-card">
+          <h2>Demo preview status</h2>
+          <ul>
+            <li id="cameraStatus">Camera evidence commitment: pending</li>
+            <li id="motionStatus">Motion snapshot: pending</li>
+            <li id="appStatus">App identity hash: pending</li>
+            <li id="keyCertStatus">Public key evidence: not present in local preview</li>
+            <li id="level4Status">Trusted device attestation (Level 4): not in local preview</li>
+            <li id="gasStatus">Production-pinned registry write: not run in browser demo</li>
+          </ul>
+        </div>
+      </aside>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,38 @@
+{
+  "name": "argus-demo",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "api/relayer",
+    "apps/marketplace-demo",
+    "apps/verifier-web",
+    "packages/argus-rn-sdk"
+  ],
+  "scripts": {
+    "start": "react-native start",
+    "android": "react-native run-android",
+    "android:debug": "cd android && ./gradlew :app:assembleDebug",
+    "demo": "node scripts/print-rn-demo-instructions.mjs",
+    "demo:web-preview": "node scripts/serve-demo.mjs",
+    "test": "node scripts/verify-demo.mjs && node api/relayer/registerProof.security.test.mjs && node api/relayer/submitRegisterProof.security.test.mjs && node packages/argus-rn-sdk/src/demoProof.security.test.mjs && node packages/argus-rn-sdk/src/registerProofWithRelayer.security.test.mjs && cargo test --manifest-path crates/argus-core/Cargo.toml && cargo test --manifest-path programs/argus-registry/Cargo.toml && node --check apps/marketplace-demo/index.js && node --check apps/verifier-web/index.js && node scripts/register-proof.mjs"
+  },
+  "dependencies": {
+    "@argus/rn-sdk": "file:packages/argus-rn-sdk",
+    "react": "19.2.3",
+    "react-native": "0.85.2"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@babel/runtime": "^7.25.0",
+    "@react-native-community/cli": "20.1.3",
+    "@react-native-community/cli-platform-android": "20.1.3",
+    "@react-native/babel-preset": "0.85.2",
+    "@react-native/metro-config": "0.85.2",
+    "@react-native/typescript-config": "0.85.2",
+    "@types/react": "^19.2.0",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=20.19.4"
+  }
+}

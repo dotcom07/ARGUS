@@ -1,0 +1,25 @@
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.argus'
+    compileSdk 35
+
+    defaultConfig {
+        minSdk 26
+    }
+}
+
+dependencies {
+    compileOnly 'com.facebook.react:react-android:0.85.2'
+    implementation 'androidx.activity:activity-ktx:1.9.3'
+    implementation 'androidx.camera:camera-camera2:1.4.1'
+    implementation 'androidx.camera:camera-lifecycle:1.4.1'
+    implementation 'androidx.camera:camera-view:1.4.1'
+    implementation 'androidx.core:core-ktx:1.15.0'
+    testImplementation 'org.json:json:20240303'
+    testCompileOnly 'com.facebook.react:react-android:0.85.2'
+    testImplementation 'org.jetbrains.kotlin:kotlin-test-junit:2.0.21'
+}
