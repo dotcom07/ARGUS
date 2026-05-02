@@ -1,13 +1,28 @@
 package com.argus
 
 import android.Manifest
+import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
-import android.widget.Button
+import android.view.Gravity
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
+import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.activity.ComponentActivity
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
@@ -16,16 +31,34 @@ import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import java.io.File
+import java.util.concurrent.TimeUnit
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 class ArgusCameraActivity : ComponentActivity() {
 
     private lateinit var previewView: PreviewView
-    private lateinit var captureButton: Button
+    private lateinit var captureButton: ShutterButton
+    private lateinit var flashButton: TextView
+    private lateinit var gridButton: TextView
+    private lateinit var flipButton: TextView
+    private lateinit var gridOverlay: GridOverlayView
+    private lateinit var focusOverlay: FocusOverlayView
+    private lateinit var zoomButtons: List<TextView>
+    private lateinit var scaleGestureDetector: ScaleGestureDetector
+
+    private var cameraProvider: ProcessCameraProvider? = null
+    private var camera: Camera? = null
     private var imageCapture: ImageCapture? = null
     private var pendingCaptureFile: File? = null
+    private var cameraLensFacing = CameraSelector.LENS_FACING_BACK
+    private var flashMode = ImageCapture.FLASH_MODE_OFF
+    private var currentZoomRatio = 1f
+    private var lastExposureDragY = 0f
+    private var exposureDragRemainder = 0f
 
-    // kr: onCreate는 CameraX preview와 capture button을 붙일 Android 화면의 시작점입니다.
-    // en: onCreate is the Android screen entry point where CameraX preview and capture button attach.
+    // kr: onCreate는 CameraX preview와 검증 촬영용 controls를 붙이는 Android 화면 시작점입니다.
+    // en: onCreate is the Android screen entry point where CameraX preview and verified-capture controls attach.
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         buildCaptureLayout()
@@ -67,32 +100,149 @@ class ArgusCameraActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    // kr: buildCaptureLayout은 검증 촬영 전용 preview와 shutter button만 보여줍니다.
-    // en: buildCaptureLayout shows only the verified-capture preview and shutter button.
+    // kr: buildCaptureLayout은 gallery import 없이 PHOTO 단일 모드 카메라 조작만 노출합니다.
+    // en: buildCaptureLayout exposes only PHOTO-mode camera controls without any gallery import path.
+    @SuppressLint("ClickableViewAccessibility")
     private fun buildCaptureLayout() {
-        previewView = PreviewView(this)
-        captureButton = Button(this)
-        captureButton.text = "Take verified photo"
-        captureButton.setOnClickListener { captureImage() }
+        previewView = PreviewView(this).apply {
+            scaleType = PreviewView.ScaleType.FILL_CENTER
+        }
+        gridOverlay = GridOverlayView(this)
+        focusOverlay = FocusOverlayView(this)
+        captureButton = ShutterButton(this).apply {
+            contentDescription = "Take verified photo"
+            setOnClickListener { captureImage() }
+        }
+        scaleGestureDetector = ScaleGestureDetector(
+            this,
+            object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                override fun onScale(detector: ScaleGestureDetector): Boolean {
+                    setZoomRatio(currentZoomRatio * detector.scaleFactor)
+                    return true
+                }
+            },
+        )
+        previewView.setOnTouchListener { _, event -> handlePreviewTouch(event) }
 
-        val layout = LinearLayout(this)
-        layout.orientation = LinearLayout.VERTICAL
-        layout.addView(
-            previewView,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                0,
-                1f,
-            ),
-        )
-        layout.addView(
-            captureButton,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-            ),
-        )
-        setContentView(layout)
+        val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+        root.addView(previewView, matchParentParams())
+        root.addView(gridOverlay, matchParentParams())
+        root.addView(focusOverlay, matchParentParams())
+        root.addView(buildTopControls(), FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            dp(86),
+            Gravity.TOP,
+        ))
+        root.addView(buildBottomControls(), FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            dp(210),
+            Gravity.BOTTOM,
+        ))
+        setContentView(root)
+    }
+
+    private fun handlePreviewTouch(event: MotionEvent): Boolean {
+        scaleGestureDetector.onTouchEvent(event)
+        if (event.pointerCount > 1) {
+            return true
+        }
+
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                lastExposureDragY = event.y
+                exposureDragRemainder = 0f
+                focusAt(event.x, event.y)
+            }
+            MotionEvent.ACTION_MOVE -> {
+                adjustExposureByDrag(event.y - lastExposureDragY)
+                lastExposureDragY = event.y
+            }
+        }
+        return true
+    }
+
+    private fun buildTopControls(): LinearLayout {
+        flashButton = topControlButton("Flash off").apply {
+            setOnClickListener { cycleFlashMode() }
+        }
+        gridButton = topControlButton("Grid on").apply {
+            setOnClickListener {
+                gridOverlay.isGridEnabled = !gridOverlay.isGridEnabled
+                updateGridButton()
+            }
+        }
+
+        return LinearLayout(this).apply {
+            gravity = Gravity.CENTER
+            orientation = LinearLayout.HORIZONTAL
+            setBackgroundColor(0xCC000000.toInt())
+            setPadding(dp(10), dp(22), dp(10), dp(10))
+            addView(flashButton, weightedTopItemParams())
+            addView(topLabel("12M"), weightedTopItemParams())
+            addView(topLabel("PHOTO"), weightedTopItemParams())
+            addView(gridButton, weightedTopItemParams())
+            updateFlashButton()
+            updateGridButton()
+        }
+    }
+
+    private fun buildBottomControls(): FrameLayout {
+        val controls = FrameLayout(this).apply {
+            setBackgroundColor(0xCC000000.toInt())
+        }
+        val zoomStrip = LinearLayout(this).apply {
+            gravity = Gravity.CENTER
+            orientation = LinearLayout.HORIZONTAL
+            background = roundedBackground(0xAA241510.toInt(), 26)
+            setPadding(dp(12), dp(4), dp(12), dp(4))
+        }
+        zoomButtons = ZOOM_PRESETS.map { preset ->
+            TextView(this).apply {
+                gravity = Gravity.CENTER
+                text = preset.label
+                textSize = 18f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(Color.WHITE)
+                setOnClickListener { setZoomRatio(preset.ratio) }
+            }
+        }
+        zoomButtons.forEach { button ->
+            zoomStrip.addView(button, LinearLayout.LayoutParams(dp(56), dp(42)))
+        }
+
+        flipButton = TextView(this).apply {
+            gravity = Gravity.CENTER
+            text = "↻"
+            textSize = 34f
+            setTextColor(Color.WHITE)
+            background = circleBackground(0x88241510.toInt())
+            contentDescription = "Switch camera"
+            setOnClickListener { switchCamera() }
+        }
+        val modeLabel = TextView(this).apply {
+            gravity = Gravity.CENTER
+            text = "PHOTO"
+            textSize = 22f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+        }
+
+        controls.addView(zoomStrip, FrameLayout.LayoutParams(dp(258), dp(52), Gravity.CENTER_HORIZONTAL or Gravity.TOP).apply {
+            topMargin = dp(8)
+        })
+        controls.addView(captureButton, FrameLayout.LayoutParams(dp(92), dp(92), Gravity.CENTER_HORIZONTAL or Gravity.TOP).apply {
+            topMargin = dp(74)
+        })
+        controls.addView(flipButton, FrameLayout.LayoutParams(dp(74), dp(74), Gravity.END or Gravity.TOP).apply {
+            topMargin = dp(84)
+            marginEnd = dp(32)
+        })
+        controls.addView(modeLabel, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            dp(42),
+            Gravity.BOTTOM,
+        ))
+        return controls
     }
 
     // kr: startCamera는 gallery import 없이 CameraX preview와 ImageCapture를 구성합니다.
@@ -101,23 +251,161 @@ class ArgusCameraActivity : ComponentActivity() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
         cameraProviderFuture.addListener(
             {
-                val cameraProvider = cameraProviderFuture.get()
-                val preview = Preview.Builder().build()
-                imageCapture = ImageCapture.Builder()
-                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                    .build()
-
-                preview.setSurfaceProvider(previewView.surfaceProvider)
-                cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(
-                    this,
-                    CameraSelector.DEFAULT_BACK_CAMERA,
-                    preview,
-                    imageCapture,
-                )
+                val provider = cameraProviderFuture.get()
+                cameraProvider = provider
+                bindCamera(provider)
             },
             ContextCompat.getMainExecutor(this),
         )
+    }
+
+    private fun bindCamera(provider: ProcessCameraProvider) {
+        val selector = cameraSelectorForCurrentLens(provider)
+        val preview = Preview.Builder().build()
+        val capture = ImageCapture.Builder()
+            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+            .setFlashMode(flashMode)
+            .build()
+
+        preview.setSurfaceProvider(previewView.surfaceProvider)
+        provider.unbindAll()
+        camera = provider.bindToLifecycle(this, selector, preview, capture)
+        imageCapture = capture
+        currentZoomRatio = camera?.cameraInfo?.zoomState?.value?.zoomRatio ?: 1f
+        updateZoomButtons()
+        updateFlashButton()
+        updateFlipButton(provider)
+    }
+
+    private fun cameraSelectorForCurrentLens(provider: ProcessCameraProvider): CameraSelector {
+        val requested = CameraSelector.Builder()
+            .requireLensFacing(cameraLensFacing)
+            .build()
+        if (provider.hasCamera(requested)) {
+            return requested
+        }
+
+        cameraLensFacing = CameraSelector.LENS_FACING_BACK
+        return CameraSelector.DEFAULT_BACK_CAMERA
+    }
+
+    private fun switchCamera() {
+        val provider = cameraProvider ?: return
+        val nextLensFacing = if (cameraLensFacing == CameraSelector.LENS_FACING_BACK) {
+            CameraSelector.LENS_FACING_FRONT
+        } else {
+            CameraSelector.LENS_FACING_BACK
+        }
+        val nextSelector = CameraSelector.Builder().requireLensFacing(nextLensFacing).build()
+        if (!provider.hasCamera(nextSelector)) {
+            return
+        }
+
+        cameraLensFacing = nextLensFacing
+        currentZoomRatio = 1f
+        bindCamera(provider)
+    }
+
+    private fun cycleFlashMode() {
+        flashMode = when (flashMode) {
+            ImageCapture.FLASH_MODE_OFF -> ImageCapture.FLASH_MODE_AUTO
+            ImageCapture.FLASH_MODE_AUTO -> ImageCapture.FLASH_MODE_ON
+            else -> ImageCapture.FLASH_MODE_OFF
+        }
+        imageCapture?.flashMode = flashMode
+        updateFlashButton()
+    }
+
+    private fun focusAt(x: Float, y: Float) {
+        val activeCamera = camera ?: return
+        val action = FocusMeteringAction.Builder(
+            previewView.meteringPointFactory.createPoint(x, y),
+            FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE,
+        )
+            .setAutoCancelDuration(3, TimeUnit.SECONDS)
+            .build()
+        activeCamera.cameraControl.startFocusAndMetering(action)
+        focusOverlay.show(x, y, exposureProgress(activeCamera))
+    }
+
+    private fun adjustExposureByDrag(deltaY: Float) {
+        val activeCamera = camera ?: return
+        val exposureState = activeCamera.cameraInfo.exposureState
+        if (!exposureState.isExposureCompensationSupported) {
+            return
+        }
+
+        exposureDragRemainder += deltaY
+        val threshold = dp(8).toFloat()
+        if (abs(exposureDragRemainder) < threshold) {
+            return
+        }
+
+        val range = exposureState.exposureCompensationRange
+        val steps = (abs(exposureDragRemainder) / threshold).roundToInt()
+        val direction = if (exposureDragRemainder < 0f) 1 else -1
+        val nextIndex = (exposureState.exposureCompensationIndex + direction * steps)
+            .coerceIn(range.lower, range.upper)
+        activeCamera.cameraControl.setExposureCompensationIndex(nextIndex)
+        focusOverlay.updateExposure(exposureProgress(activeCamera, nextIndex))
+        exposureDragRemainder = 0f
+    }
+
+    private fun exposureProgress(activeCamera: Camera, pendingIndex: Int? = null): Float {
+        val exposureState = activeCamera.cameraInfo.exposureState
+        if (!exposureState.isExposureCompensationSupported) {
+            return 0f
+        }
+
+        val range = exposureState.exposureCompensationRange
+        val spread = (range.upper - range.lower).toFloat()
+        if (spread <= 0f) {
+            return 0f
+        }
+        val index = pendingIndex ?: exposureState.exposureCompensationIndex
+        return (((index - range.lower) / spread) * 2f - 1f).coerceIn(-1f, 1f)
+    }
+
+    private fun setZoomRatio(requestedRatio: Float) {
+        val activeCamera = camera ?: return
+        val zoomState = activeCamera.cameraInfo.zoomState.value ?: return
+        val nextRatio = requestedRatio.coerceIn(zoomState.minZoomRatio, zoomState.maxZoomRatio)
+        currentZoomRatio = nextRatio
+        activeCamera.cameraControl.setZoomRatio(nextRatio)
+        updateZoomButtons()
+    }
+
+    private fun updateZoomButtons() {
+        val zoomState = camera?.cameraInfo?.zoomState?.value
+        zoomButtons.forEachIndexed { index, button ->
+            val ratio = ZOOM_PRESETS[index].ratio
+            val supported = zoomState == null || ratio in zoomState.minZoomRatio..zoomState.maxZoomRatio
+            val selected = abs(currentZoomRatio - ratio) < 0.12f
+            button.isEnabled = supported
+            button.alpha = if (supported) 1f else 0.35f
+            button.setTextColor(if (selected) Color.BLACK else Color.WHITE)
+            button.background = if (selected) circleBackground(Color.WHITE) else null
+        }
+    }
+
+    private fun updateFlashButton() {
+        flashButton.text = when (flashMode) {
+            ImageCapture.FLASH_MODE_AUTO -> "⚡A"
+            ImageCapture.FLASH_MODE_ON -> "⚡"
+            else -> "⚡/"
+        }
+    }
+
+    private fun updateGridButton() {
+        gridButton.text = if (gridOverlay.isGridEnabled) "▦" else "□"
+    }
+
+    private fun updateFlipButton(provider: ProcessCameraProvider) {
+        val frontSelector = CameraSelector.Builder()
+            .requireLensFacing(CameraSelector.LENS_FACING_FRONT)
+            .build()
+        flipButton.isEnabled = provider.hasCamera(frontSelector)
+        flipButton.alpha = if (flipButton.isEnabled) 1f else 0.35f
     }
 
     // kr: captureImage는 CameraX가 저장한 파일을 즉시 다시 읽어 RN module이 나중에 같은 bytes만 binding하게 합니다.
@@ -236,6 +524,54 @@ class ArgusCameraActivity : ComponentActivity() {
         ) == PackageManager.PERMISSION_GRANTED
     }
 
+    private fun matchParentParams(): FrameLayout.LayoutParams {
+        return FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+        )
+    }
+
+    private fun weightedTopItemParams(): LinearLayout.LayoutParams {
+        return LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
+    }
+
+    private fun topControlButton(description: String): TextView {
+        return topLabel("").apply {
+            contentDescription = description
+            textSize = 24f
+        }
+    }
+
+    private fun topLabel(value: String): TextView {
+        return TextView(this).apply {
+            gravity = Gravity.CENTER
+            text = value
+            textSize = 20f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+        }
+    }
+
+    private fun roundedBackground(color: Int, radiusDp: Int): GradientDrawable {
+        return GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = dp(radiusDp).toFloat()
+        }
+    }
+
+    private fun circleBackground(color: Int): GradientDrawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(color)
+        }
+    }
+
+    private fun dp(value: Int): Int {
+        return (value * resources.displayMetrics.density).roundToInt()
+    }
+
+    private data class ZoomPreset(val label: String, val ratio: Float)
+
     companion object {
         const val EXTRA_CAPTURE_PATH = "argusCapturePath"
         const val EXTRA_CAPTURED_AT_MS = "argusCapturedAtMs"
@@ -251,5 +587,137 @@ class ArgusCameraActivity : ComponentActivity() {
         const val EXTRA_PARTNER_ID = "argusPartnerId"
         const val EXTRA_USE_CASE = "argusUseCase"
         private const val CAMERA_PERMISSION_REQUEST = 4207
+        private val ZOOM_PRESETS = listOf(
+            ZoomPreset(".6", 0.6f),
+            ZoomPreset("1x", 1f),
+            ZoomPreset("2", 2f),
+            ZoomPreset("3", 3f),
+        )
+    }
+}
+
+private class GridOverlayView(context: Context) : View(context) {
+    var isGridEnabled = true
+        set(value) {
+            field = value
+            invalidate()
+        }
+
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        alpha = 105
+        strokeWidth = 1.2f * resources.displayMetrics.density
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        if (!isGridEnabled) {
+            return
+        }
+
+        val firstX = width / 3f
+        val secondX = width * 2f / 3f
+        val firstY = height / 3f
+        val secondY = height * 2f / 3f
+        canvas.drawLine(firstX, 0f, firstX, height.toFloat(), paint)
+        canvas.drawLine(secondX, 0f, secondX, height.toFloat(), paint)
+        canvas.drawLine(0f, firstY, width.toFloat(), firstY, paint)
+        canvas.drawLine(0f, secondY, width.toFloat(), secondY, paint)
+    }
+}
+
+private class FocusOverlayView(context: Context) : View(context) {
+    private val density = resources.displayMetrics.density
+    private val focusPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        style = Paint.Style.STROKE
+        strokeWidth = 1.8f * density
+    }
+    private val yellowStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFFFCC00.toInt()
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeWidth = 3f * density
+    }
+    private val yellowFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFFFCC00.toInt()
+        style = Paint.Style.FILL
+    }
+
+    private var centerX = 0f
+    private var centerY = 0f
+    private var exposureProgress = 0f
+    private var isShowing = false
+
+    init {
+        isClickable = false
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+
+    fun show(x: Float, y: Float, exposure: Float) {
+        centerX = x
+        centerY = y
+        exposureProgress = exposure
+        isShowing = true
+        invalidate()
+        removeCallbacks(hideRunnable)
+        postDelayed(hideRunnable, 2600)
+    }
+
+    fun updateExposure(exposure: Float) {
+        if (!isShowing) {
+            return
+        }
+
+        exposureProgress = exposure
+        invalidate()
+        removeCallbacks(hideRunnable)
+        postDelayed(hideRunnable, 2600)
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        if (!isShowing) {
+            return
+        }
+
+        val radius = 46f * density
+        canvas.drawCircle(centerX, centerY, radius, focusPaint)
+        canvas.drawLine(centerX - radius, centerY, centerX - 12f * density, centerY, focusPaint)
+        canvas.drawLine(centerX + 12f * density, centerY, centerX + radius, centerY, focusPaint)
+        canvas.drawLine(centerX, centerY - radius, centerX, centerY - 12f * density, focusPaint)
+        canvas.drawLine(centerX, centerY + 12f * density, centerX, centerY + radius, focusPaint)
+
+        val sliderY = centerY + radius + 54f * density
+        val sliderHalfWidth = 52f * density
+        canvas.drawLine(centerX - sliderHalfWidth, sliderY, centerX + sliderHalfWidth, sliderY, yellowStrokePaint)
+        canvas.drawCircle(centerX + exposureProgress * sliderHalfWidth, sliderY, 8f * density, yellowFillPaint)
+        canvas.drawCircle(centerX, sliderY - 30f * density, 7f * density, yellowFillPaint)
+        canvas.drawLine(centerX - 36f * density, sliderY - 30f * density, centerX - 22f * density, sliderY - 30f * density, yellowStrokePaint)
+        canvas.drawLine(centerX + 22f * density, sliderY - 30f * density, centerX + 36f * density, sliderY - 30f * density, yellowStrokePaint)
+    }
+
+    private val hideRunnable = Runnable {
+        isShowing = false
+        invalidate()
+    }
+}
+
+private class ShutterButton(context: Context) : View(context) {
+    private val whitePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        style = Paint.Style.FILL
+    }
+    private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xE6FFFFFF.toInt()
+        style = Paint.Style.STROKE
+        strokeWidth = 4f * resources.displayMetrics.density
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val radius = width.coerceAtMost(height) / 2f - 6f * resources.displayMetrics.density
+        canvas.drawCircle(width / 2f, height / 2f, radius, whitePaint)
+        canvas.drawCircle(width / 2f, height / 2f, radius + 5f * resources.displayMetrics.density, strokePaint)
     }
 }
