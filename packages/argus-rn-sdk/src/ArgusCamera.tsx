@@ -35,8 +35,21 @@ export function ArgusCamera(props: ArgusCameraProps) {
 
   return (
     <View>
-      <Pressable disabled={isCapturing} onPress={handlePress}>
-        <Text>{isCapturing ? "Opening Argus camera..." : "Open Argus camera"}</Text>
+      <Pressable
+        disabled={isCapturing}
+        onPress={handlePress}
+        style={{
+          alignItems: "center",
+          backgroundColor: isCapturing ? "#9aa3af" : "#3665f3",
+          borderRadius: 22,
+          minHeight: 44,
+          justifyContent: "center",
+          paddingHorizontal: 16,
+        }}
+      >
+        <Text style={{ color: "#ffffff", fontSize: 15, fontWeight: "800" }}>
+          {isCapturing ? "Opening camera..." : "Capture with Argus SDK"}
+        </Text>
       </Pressable>
     </View>
   );

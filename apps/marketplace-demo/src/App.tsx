@@ -2,18 +2,19 @@ import React, { useEffect, useState } from "react";
 import {
   Alert,
   Image,
+  Linking,
   Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
+  type ImageSourcePropType,
 } from "react-native";
 import {
   ArgusBadge,
   ArgusCamera,
   ArgusProofLink,
-  ArgusProofSummary,
   ARGUS_LOCAL_DEMO_RELAYER,
   configure,
   getArgusEvidenceLevel,
@@ -29,8 +30,9 @@ import {
   ARGUS_DEMO_PARTNER_ID,
   ARGUS_DEMO_USE_CASE,
 } from "../../shared/argusDemoConfig";
-import { captureProof, listing } from "./data/listing";
+import { listing } from "./data/listing";
 import { createMarketplaceSimulatorProof } from "./demoProof";
+import { FigmaIcon, type FigmaIconName } from "./FigmaIcon";
 import {
   buildListingDraft,
   loadLocalListingDraft,
@@ -41,19 +43,76 @@ import {
 
 type TabId = "home" | "myEbay" | "search" | "inbox" | "selling";
 type UploadSource = "argus_camera" | "local_upload";
+type DemoHomeListing = {
+  condition: string;
+  details?: string;
+  image: ImageSourcePropType;
+  price: string;
+  priceDetail?: string;
+  seller: string;
+  sellerInitial: string;
+  sellerScore: string;
+  title: string;
+};
 
-const bottomTabs: Array<{ id: TabId; label: string; icon: string }> = [
-  { id: "home", label: "Home", icon: "H" },
-  { id: "myEbay", label: "My eBay", icon: "Me" },
-  { id: "search", label: "Search", icon: "S" },
-  { id: "inbox", label: "Inbox", icon: "In" },
-  { id: "selling", label: "Selling", icon: "$" },
+const appLogo = require("../assets/ebay_argus.png");
+
+const bottomTabs: Array<{ id: TabId; label: string; icon: FigmaIconName }> = [
+  { id: "home", label: "Home", icon: "home" },
+  { id: "myEbay", label: "My eBay", icon: "profile" },
+  { id: "search", label: "Search", icon: "search" },
+  { id: "inbox", label: "Inbox", icon: "bell" },
+  { id: "selling", label: "Selling", icon: "tag" },
+];
+
+const categoryLinks: Array<{ label: string; icon: FigmaIconName }> = [
+  { label: "Saved", icon: "heart" },
+  { label: "Selling", icon: "tag" },
+  { label: "Deals", icon: "filter" },
+  { label: "Cameras", icon: "camera" },
+  { label: "Collectibles", icon: "plusSquare" },
+];
+
+const homeListings: DemoHomeListing[] = [
+  {
+    condition: "Good used",
+    details: "Japanese model - 4GB",
+    image: require("../assets/ebay/Nintendo New 3DS.webp") as ImageSourcePropType,
+    price: "US $340.39",
+    priceDetail: "Was US $369.99 - 8% off",
+    seller: "The Coco Store",
+    sellerInitial: "T",
+    sellerScore: "38095 - 99.9% positive",
+    title: "Nintendo New 3DS LL XL 4GB Handheld Gaming System Black",
+  },
+  {
+    condition: "Used",
+    details: "Excellent condition lightly used",
+    image: require("../assets/ebay/Ricoh WG-M1 Digital Camera.webp") as ImageSourcePropType,
+    price: "US $145.00",
+    priceDetail: "or Best Offer",
+    seller: "rbrodley",
+    sellerInitial: "R",
+    sellerScore: "5",
+    title: "Ricoh WG-M1 Digital Camera Black Includes bag and accessories",
+  },
+  {
+    condition: "New with box",
+    details: "US Shoe Size 8.5 - Nike",
+    image: require("../assets/ebay/nike air jordan 1 mid.webp") as ImageSourcePropType,
+    price: "AU $170.00",
+    priceDetail: "Approximately US $122.43",
+    seller: "lamil90",
+    sellerInitial: "L",
+    sellerScore: "0",
+    title: "nike air jordan 1 mid",
+  },
 ];
 
 export default function MarketplaceDemoApp() {
   const [draft, setDraft] = useState<LocalListingDraft | null>(() => loadLocalListingDraft());
   const [proof, setProof] = useState<ArgusProof | null>(() => draft?.proof ?? null);
-  const [activeTab, setActiveTab] = useState<TabId>("selling");
+  const [activeTab, setActiveTab] = useState<TabId>("home");
   const [lastError, setLastError] = useState<string | null>(draft?.backendMessage ?? null);
   const [backendStatus, setBackendStatus] = useState<ListingBackendStatus>(
     () => draft?.backendStatus ?? "pending",
@@ -86,7 +145,7 @@ export default function MarketplaceDemoApp() {
   function handleNativeError(error: Error) {
     const simulatorProof = createMarketplaceSimulatorProof();
     persistDraft(simulatorProof, {
-      backendMessage: `Local photo and JSON saved. Native CameraX was unavailable here: ${error.message}`,
+      backendMessage: `SDK capture failed: ${error.message}`,
       backendStatus: "local_only",
       uploadSource: "local_upload",
     });
@@ -100,8 +159,7 @@ export default function MarketplaceDemoApp() {
   function handleUploadLocalPhoto() {
     const simulatorProof = createMarketplaceSimulatorProof();
     persistDraft(simulatorProof, {
-      backendMessage:
-        "Local demo photo and JSON saved on device. Use the Argus camera button on Android for production evidence.",
+      backendMessage: "Local preview saved",
       backendStatus: "local_only",
       uploadSource: "local_upload",
     });
@@ -111,7 +169,7 @@ export default function MarketplaceDemoApp() {
   async function persistAndRegisterProof(createdProof: ArgusProof) {
     setIsSimulatorFallback(false);
     persistDraft(createdProof, {
-      backendMessage: "Saved locally. Contacting Argus backend for proof-bundle registration.",
+      backendMessage: "Registering proof",
       backendStatus: "registering",
       uploadSource: "argus_camera",
     });
@@ -128,15 +186,14 @@ export default function MarketplaceDemoApp() {
       );
       const registeredProof = { ...createdProof, ...registration };
       persistDraft(registeredProof, {
-        backendMessage:
-          "Backend accepted the proof bundle. Production status still requires an authorized production relayer fee payer and sponsored gas.",
+        backendMessage: "Solana devnet registered",
         backendStatus: "registered",
         uploadSource: "argus_camera",
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Backend registration failed";
       persistDraft(createdProof, {
-        backendMessage: `Saved locally; backend registration is pending. ${message}`,
+        backendMessage: `Registration pending: ${message}`,
         backendStatus: "local_only",
         uploadSource: "argus_camera",
       });
@@ -169,7 +226,7 @@ export default function MarketplaceDemoApp() {
   }
 
   function handleOpenVerifier(url: string) {
-    Alert.alert("Argus verifier", url);
+    void Linking.openURL(url).catch(() => Alert.alert("Argus verifier", url));
   }
 
   return (
@@ -177,45 +234,50 @@ export default function MarketplaceDemoApp() {
       <View style={styles.appShell}>
         <ScrollView contentContainerStyle={styles.screen} style={styles.scrollView}>
           <View style={styles.topBar}>
-            <Text style={styles.brand}>
-              <Text style={styles.ebayRed}>e</Text>
-              <Text style={styles.ebayBlue}>b</Text>
-              <Text style={styles.ebayYellow}>a</Text>
-              <Text style={styles.ebayGreen}>y</Text>
-              <Text style={styles.argusWord}> argus</Text>
-            </Text>
-            <Text style={styles.cartButton}>Cart</Text>
+            <Image source={appLogo} style={styles.brandLogo} resizeMode="contain" />
+            <View style={styles.topIconButton}>
+              <FigmaIcon color="#ffffff" name="cart" size={22} />
+            </View>
           </View>
 
           <View style={styles.searchBar}>
-            <Text style={styles.searchIcon}>S</Text>
+            <FigmaIcon color="#6b7280" name="search" size={20} />
             <Text style={styles.searchText}>Search on eBay</Text>
-            <Text style={styles.cameraIcon}>Cam</Text>
+            <FigmaIcon color="#6b7280" name="camera" size={22} />
           </View>
 
           <View style={styles.categoryStrip}>
-            {["Saved", "Selling", "Deals", "Cameras", "Collectibles"].map((category) => (
-              <Text key={category} style={styles.categoryLink}>
-                {category}
-              </Text>
+            {categoryLinks.map((category) => (
+              <View key={category.label} style={styles.categoryPill}>
+                <FigmaIcon color="#374151" name={category.icon} size={15} />
+                <Text style={styles.categoryLink}>{category.label}</Text>
+              </View>
             ))}
           </View>
 
+          {activeTab === "home" ? (
+            <HomeScreen
+              backendStatus={backendStatus}
+              isRegistering={isRegistering}
+              isSimulatorPreview={isSimulatorPreview}
+              listingStatus={listingStatus}
+              photoUri={photoUri}
+              proof={proof}
+            />
+          ) : activeTab === "selling" ? (
+            <>
           <View style={styles.sellingHero}>
             <Text style={styles.eyebrow}>Selling</Text>
             <Text style={styles.sellingHeroTitle}>List an item</Text>
-            <Text style={styles.panelCopy}>
-              Camera capture, local JSON save, backend proof registration, then a visible listing badge.
-            </Text>
             <View style={styles.flowSteps}>
-              <FlowStep index="1" title="Photo" copy={proof ? "Photo saved" : "Capture proof pending"} active />
+              <FlowStep index="1" title="Capture" copy={proof ? "SDK photo saved" : "Use Argus SDK"} active />
               <FlowStep
                 index="2"
-                title="ARGUS check"
+                title="Verify"
                 copy={statusCopy(backendStatus, isRegistering)}
                 active={backendStatus === "registering" || backendStatus === "registered"}
               />
-              <FlowStep index="3" title="Ready to list" copy={listingStatus} active={hasVerifiedOrPreviewProof} />
+              <FlowStep index="3" title="List" copy={listingStatus} active={hasVerifiedOrPreviewProof} />
             </View>
           </View>
 
@@ -261,10 +323,6 @@ export default function MarketplaceDemoApp() {
 
           <View style={styles.panel}>
             <Text style={styles.panelTitle}>Create listing photo</Text>
-            <Text style={styles.panelCopy}>
-              The SDK camera creates the proof bundle. The demo also saves the photo bytes and JSON locally so the
-              listing can recover after refresh.
-            </Text>
             <ArgusCamera
               partnerId={ARGUS_DEMO_PARTNER_ID}
               useCase={ARGUS_DEMO_USE_CASE}
@@ -277,14 +335,16 @@ export default function MarketplaceDemoApp() {
               onError={handleNativeError}
             />
             <Pressable accessibilityRole="button" onPress={handleUploadLocalPhoto} style={styles.uploadAction}>
+              <FigmaIcon color="#ffffff" name="upload" size={18} />
               <Text style={styles.uploadActionText}>Upload local demo photo</Text>
             </Pressable>
             {lastError ? <Text style={styles.fallbackNote}>{lastError}</Text> : null}
-            <Text style={styles.storageNote}>
-              Local JSON: {draft ? "saved" : "waiting"} - Backend: {statusCopy(backendStatus, isRegistering)}
-            </Text>
-            {isSimulatorPreview ? null : <ArgusProofSummary proof={proof} />}
-            <CaptureProofDetails proof={proof} isSimulatorPreview={isSimulatorPreview} />
+            <VerificationSnapshot
+              backendStatus={backendStatus}
+              isRegistering={isRegistering}
+              isSimulatorPreview={isSimulatorPreview}
+              proof={proof}
+            />
             <View style={styles.verifierButton}>
               <ArgusProofLink proof={proof} onOpen={handleOpenVerifier} />
             </View>
@@ -305,54 +365,38 @@ export default function MarketplaceDemoApp() {
           </View>
 
           <View style={styles.panel}>
-            <Text style={styles.panelTitle}>Proof status</Text>
-            <Text style={styles.panelCopy}>
-              Production verified means native capture plus registry policy, authorized production relayer fee payer,
-              and sponsored gas.
-            </Text>
+            <Text style={styles.panelTitle}>SDK checks</Text>
             <EvidenceLine
-              label={
-                isLocalOnlyProof || isSimulatorPreview
-                  ? "Simulated camera evidence commitment"
-                  : "Camera evidence commitment"
-              }
+              label={isLocalOnlyProof || isSimulatorPreview ? "Camera evidence" : "Native CameraX"}
               isReady={Boolean(hasVerifiedOrPreviewProof && proof?.deviceEvidenceSummary?.cameraMetadata)}
             />
             <EvidenceLine
-              label={isLocalOnlyProof || isSimulatorPreview ? "Simulated motion snapshot" : "Motion snapshot"}
+              label="Motion snapshot"
               isReady={Boolean(hasVerifiedOrPreviewProof && proof?.deviceEvidenceSummary?.motionSnapshot)}
             />
             <EvidenceLine
-              label={isLocalOnlyProof || isSimulatorPreview ? "Simulated app identity hash" : "App identity hash"}
+              label="App identity hash"
               isReady={Boolean(hasVerifiedOrPreviewProof && proof?.deviceEvidenceSummary?.appIdentityHash)}
             />
             <EvidenceLine
-              label={
-                isLocalOnlyProof || isSimulatorPreview
-                  ? "Public key evidence (not present in local preview)"
-                  : "Public key evidence (Level 3)"
-              }
+              label="Level 3 key"
               isReady={Boolean(isProductionProof && hasArgusPublicKeyCertificateEvidence(proof))}
             />
             <EvidenceLine
-              label={
-                isLocalOnlyProof || isSimulatorPreview
-                  ? "Trusted device attestation (Level 4, not in local preview)"
-                  : "Trusted device attestation (Level 4)"
-              }
+              label="Level 4 attestation"
               isReady={Boolean(
                 isProductionProof && getArgusEvidenceLevel(proof) === "level_4_hardware_attestation",
               )}
             />
             <EvidenceLine
-              label={
-                isLocalOnlyProof || isSimulatorPreview
-                  ? "Authorized relayer registration (not present in local preview)"
-                  : "Authorized fee payer + sponsored gas (production relayer + pinned registry)"
-              }
+              label="Authorized relayer"
               isReady={Boolean(isProductionProof && proof?.proofRecord?.relayerAuthorized)}
             />
           </View>
+            </>
+          ) : (
+            <PlaceholderTab label={bottomTabs.find((tab) => tab.id === activeTab)?.label ?? "eBay"} />
+          )}
         </ScrollView>
 
         <View style={styles.bottomNav}>
@@ -363,13 +407,149 @@ export default function MarketplaceDemoApp() {
               onPress={() => setActiveTab(tab.id)}
               style={activeTab === tab.id ? styles.bottomTabActive : styles.bottomTab}
             >
-              <Text style={activeTab === tab.id ? styles.bottomIconActive : styles.bottomIcon}>{tab.icon}</Text>
+              <FigmaIcon
+                color={activeTab === tab.id ? "#3665f3" : "#111827"}
+                name={tab.icon}
+                size={22}
+              />
               <Text style={activeTab === tab.id ? styles.bottomLabelActive : styles.bottomLabel}>{tab.label}</Text>
             </Pressable>
           ))}
         </View>
       </View>
     </SafeAreaView>
+  );
+}
+
+function HomeScreen({
+  backendStatus,
+  isRegistering,
+  isSimulatorPreview,
+  listingStatus,
+  photoUri,
+  proof,
+}: {
+  backendStatus: ListingBackendStatus;
+  isRegistering: boolean;
+  isSimulatorPreview: boolean;
+  listingStatus: string;
+  photoUri: string;
+  proof: ArgusProof | null;
+}) {
+  return (
+    <>
+      <View style={styles.homeHeader}>
+        <Text style={styles.homeTitle}>Home</Text>
+        <Text style={styles.homeSubtitle}>Marketplace listings</Text>
+      </View>
+
+      {homeListings.map((item) => (
+        <HomeListingCard item={item} key={item.title} />
+      ))}
+
+      {proof ? (
+        <View style={styles.homeSection}>
+          <Text style={styles.panelTitle}>Your Argus listing</Text>
+          <ArgusHomeListing
+            backendStatus={backendStatus}
+            isRegistering={isRegistering}
+            isSimulatorPreview={isSimulatorPreview}
+            listingStatus={listingStatus}
+            photoUri={photoUri}
+            proof={proof}
+          />
+        </View>
+      ) : null}
+    </>
+  );
+}
+
+function HomeListingCard({ item }: { item: DemoHomeListing }) {
+  return (
+    <View style={styles.homeListingCard}>
+      <Image source={item.image} style={styles.homeListingImage} resizeMode="cover" />
+      <View style={styles.homeListingBody}>
+        <Text style={styles.homeListingTitle}>{item.title}</Text>
+        <View style={styles.sellerLine}>
+          <Text style={styles.sellerAvatar}>{item.sellerInitial}</Text>
+          <Text style={styles.homeMeta}>
+            {item.seller} - {item.sellerScore}
+          </Text>
+        </View>
+        <Text style={styles.homePrice}>{item.price}</Text>
+        {item.priceDetail ? <Text style={styles.homeMeta}>{item.priceDetail}</Text> : null}
+        <Text style={styles.homeMeta}>Condition: {item.condition}</Text>
+        {item.details ? <Text style={styles.homeMeta}>{item.details}</Text> : null}
+        <Text style={styles.notVerifiedPill}>Argus not verified</Text>
+      </View>
+    </View>
+  );
+}
+
+function ArgusHomeListing({
+  backendStatus,
+  isRegistering,
+  isSimulatorPreview,
+  listingStatus,
+  photoUri,
+  proof,
+}: {
+  backendStatus: ListingBackendStatus;
+  isRegistering: boolean;
+  isSimulatorPreview: boolean;
+  listingStatus: string;
+  photoUri: string;
+  proof: ArgusProof;
+}) {
+  const solanaUrl = getSolanaExplorerUrl(proof);
+  const level = getArgusEvidenceLevelLabel(proof) ?? proof.proofRecord?.proofLevel ?? proof.proofLevel;
+  const statusLabel = isArgusProductionProof(proof)
+    ? "Argus verified"
+    : isArgusLocalDemoProof(proof) || isSimulatorPreview
+      ? "Argus demo preview"
+      : listingStatus;
+
+  return (
+    <View style={styles.argusHomeCard}>
+      <Image source={{ uri: photoUri }} style={styles.homeListingImage} resizeMode="cover" />
+      <View style={styles.homeListingBody}>
+        <View style={styles.snapshotHeader}>
+          <ArgusBadge proof={proof} />
+          <Text style={styles.verifiedPill}>{statusLabel}</Text>
+        </View>
+        <Text style={styles.homeListingTitle}>{listing.title}</Text>
+        <Text style={styles.homePrice}>{listing.price}</Text>
+        <View style={styles.homeProofGrid}>
+          <ProofDetail label="Level" value={level ?? "Pending"} />
+          <ProofDetail label="Registry" value={proof.proofRecord?.status ?? "pending"} />
+          <ProofDetail label="Solana" value={proof.solanaTx ? shortenHash(proof.solanaTx) : "Pending"} />
+          <ProofDetail label="Backend" value={statusCopy(backendStatus, isRegistering)} />
+        </View>
+        <Pressable
+          accessibilityRole="link"
+          disabled={!solanaUrl}
+          onPress={() => {
+            if (solanaUrl) {
+              void Linking.openURL(solanaUrl);
+            }
+          }}
+          style={solanaUrl ? styles.solanaAction : styles.solanaActionDisabled}
+        >
+          <Text style={solanaUrl ? styles.solanaActionText : styles.solanaActionTextDisabled}>
+            {solanaUrl ? "Open Solana scan" : "Solana record pending"}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function PlaceholderTab({ label }: { label: string }) {
+  return (
+    <View style={styles.panel}>
+      <Text style={styles.panelTitle}>{label}</Text>
+      <Text style={styles.panelCopy}>Demo tab</Text>
+    </View>
   );
 }
 
@@ -427,6 +607,7 @@ function ProductPreview({ photoUri, proof }: { photoUri: string; proof: ArgusPro
       <Text style={styles.priceSmall}>{listing.price}</Text>
       <View style={styles.productBadgeRow}>
         <ArgusBadge proof={proof} />
+        <FigmaIcon color={proof ? "#0f7b5f" : "#596273"} name={proof ? "shieldCheck" : "shield"} size={18} />
         <Text style={styles.shipping}>
           {proof ? "Photo captured for this listing" : "Capture proof appears here after upload"}
         </Text>
@@ -435,100 +616,62 @@ function ProductPreview({ photoUri, proof }: { photoUri: string; proof: ArgusPro
   );
 }
 
-export function CaptureProofDetails({
+export function VerificationSnapshot({
+  backendStatus,
+  isRegistering,
   proof,
   isSimulatorPreview = false,
 }: {
+  backendStatus: ListingBackendStatus;
+  isRegistering: boolean;
   proof: ArgusProof | null;
   isSimulatorPreview?: boolean;
 }) {
-  const manifestHash = proof?.manifestHash ?? captureProof.manifestHash;
-  const solanaTx = proof?.solanaTx ?? captureProof.solanaTx;
+  const solanaTx = proof?.solanaTx;
   const isProductionProof = isArgusProductionProof(proof);
   const isLocalDemoProof = isArgusLocalDemoProof(proof);
   const isTrustedSimulatorPreview = isMarketplaceSimulatorPreviewProof(proof, isSimulatorPreview);
   const displayedProofLevel = proof?.proofRecord?.proofLevel ?? proof?.proofLevel;
-  const evidenceLevelLabel = getArgusEvidenceLevelLabel(proof);
-  const displayedEvidenceLevel = evidenceLevelLabel ?? displayedProofLevel;
-  const isPendingProof = !proof;
-  const isTrustedOrPreviewProof = isProductionProof || isLocalDemoProof || isTrustedSimulatorPreview;
-  const evidenceStatus = proof
+  const displayedEvidenceLevel = getArgusEvidenceLevelLabel(proof) ?? displayedProofLevel;
+  const statusLabel = proof
     ? isProductionProof
-      ? "OK"
+      ? "Verified"
       : isLocalDemoProof
         ? "Local preview"
         : isTrustedSimulatorPreview
           ? "Simulator preview"
           : "Unverified"
     : "Pending";
-  const proofIdLabel = isLocalDemoProof
-    ? "Local demo preview proof ID"
-    : isTrustedSimulatorPreview
-      ? "Simulator preview proof ID"
-      : isProductionProof
-        ? "Proof ID"
-        : isPendingProof
-          ? "Proof ID"
-          : "Claimed proof ID";
-  const transactionLabel = isProductionProof
-    ? "Reported transaction reference"
-    : isLocalDemoProof
-      ? "Simulated preview transaction reference"
-      : isTrustedSimulatorPreview
-        ? "Simulator preview transaction reference"
-        : isPendingProof
-          ? "Transaction reference"
-          : "Claimed transaction reference";
-  const manifestHashLabel = isProductionProof
-    ? "Manifest hash"
-    : isLocalDemoProof || isTrustedSimulatorPreview
-      ? "Preview manifest hash"
-      : isPendingProof
-        ? "Manifest hash"
-        : "Claimed manifest hash";
-  const proofLevelLabel = isProductionProof
-    ? "Evidence level"
-    : isLocalDemoProof || isTrustedSimulatorPreview
-      ? "Preview evidence level"
-      : isPendingProof
-        ? "Evidence level"
-        : "Claimed evidence level";
+  const registryStatus = proof?.proofRecord?.status ?? "pending";
+  const solanaUrl = getSolanaExplorerUrl(proof);
 
   return (
-    <View style={styles.detailsPanel}>
-      <ProofDetail label={proofIdLabel} value={proof?.proofId ?? "Waiting for capture proof"} />
-      <ProofDetail
-        label={manifestHashLabel}
-        value={proof ? shortenHash(manifestHash) : "Waiting for capture"}
-      />
-      <ProofDetail
-        label={transactionLabel}
-        value={proof ? shortenHash(solanaTx) : "Waiting for registration"}
-      />
-      <ProofDetail
-        label={proofLevelLabel}
-        value={
-          isTrustedOrPreviewProof
-            ? displayedEvidenceLevel ?? "Waiting for policy check"
-            : displayedEvidenceLevel
-              ? `${displayedEvidenceLevel} (not verified)`
-              : "Waiting for policy check"
-        }
-      />
-
-      <Text style={styles.detailHeading}>Evidence summary</Text>
-      {captureProof.evidence.map((item) => (
-        <Text key={item} style={styles.evidenceLine}>
-          {evidenceStatus} - {item}
+    <View style={styles.snapshotPanel}>
+      <View style={styles.snapshotHeader}>
+        <ArgusBadge proof={proof} />
+        <Text style={styles.snapshotStatus}>{statusLabel}</Text>
+      </View>
+      <View style={styles.metricGrid}>
+        <ProofDetail label="Level" value={displayedEvidenceLevel ?? "Pending"} />
+        <ProofDetail label="Registry" value={registryStatus} />
+        <ProofDetail label="Solana" value={solanaTx ? shortenHash(solanaTx) : "Pending"} />
+        <ProofDetail label="Backend" value={statusCopy(backendStatus, isRegistering)} />
+      </View>
+      <Text style={styles.proofTiny}>{proof ? `Proof ${shortenHash(proof.proofId)}` : "Proof pending"}</Text>
+      <Pressable
+        accessibilityRole="link"
+        disabled={!solanaUrl}
+        onPress={() => {
+          if (solanaUrl) {
+            void Linking.openURL(solanaUrl);
+          }
+        }}
+        style={solanaUrl ? styles.solanaAction : styles.solanaActionDisabled}
+      >
+        <Text style={solanaUrl ? styles.solanaActionText : styles.solanaActionTextDisabled}>
+          {solanaUrl ? "Open Solana Explorer" : "Solana record pending"}
         </Text>
-      ))}
-
-      <Text style={styles.detailHeading}>Proof limitations</Text>
-      {captureProof.limitations.map((item) => (
-        <Text key={item} style={styles.limitLine}>
-          - {item}
-        </Text>
-      ))}
+      </Pressable>
     </View>
   );
 }
@@ -561,9 +704,12 @@ function isMarketplaceSimulatorPreviewProof(proof: ArgusProof | null, isSimulato
 
 function EvidenceLine({ label, isReady }: { label: string; isReady: boolean }) {
   return (
-    <Text style={styles.evidenceLine}>
-      {label}: {isReady ? "captured" : "pending"}
-    </Text>
+    <View style={styles.evidenceStatusRow}>
+      <FigmaIcon color={isReady ? "#0f7b5f" : "#596273"} name={isReady ? "check" : "shield"} size={16} />
+      <Text style={styles.evidenceStatusText}>
+        {label}: {isReady ? "captured" : "pending"}
+      </Text>
+    </View>
   );
 }
 
@@ -595,6 +741,14 @@ export function shortenHash(value?: string) {
   return `${value.slice(0, 12)}...${value.slice(-8)}`;
 }
 
+function getSolanaExplorerUrl(proof: ArgusProof | null): string | undefined {
+  if (!proof?.solanaTx || proof.proofRecord?.status !== "active") {
+    return undefined;
+  }
+
+  return `https://explorer.solana.com/tx/${proof.solanaTx}?cluster=devnet`;
+}
+
 const styles = StyleSheet.create({
   safeArea: {
     backgroundColor: "#ffffff",
@@ -617,38 +771,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     minHeight: 48,
   },
-  brand: {
-    color: "#111827",
+  brandLogo: {
     flex: 1,
-    fontSize: 32,
-    fontWeight: "800",
+    height: 42,
+    maxWidth: 170,
   },
-  ebayRed: {
-    color: "#e53238",
-  },
-  ebayBlue: {
-    color: "#0064d2",
-  },
-  ebayYellow: {
-    color: "#f5af02",
-  },
-  ebayGreen: {
-    color: "#86b817",
-  },
-  argusWord: {
-    color: "#42464d",
-    fontSize: 17,
-    fontWeight: "800",
-  },
-  cartButton: {
+  topIconButton: {
+    alignItems: "center",
     backgroundColor: "#111827",
     borderRadius: 22,
-    color: "#ffffff",
-    fontSize: 20,
     height: 44,
-    lineHeight: 44,
-    overflow: "hidden",
-    textAlign: "center",
+    justifyContent: "center",
     width: 44,
   },
   searchBar: {
@@ -661,34 +794,121 @@ const styles = StyleSheet.create({
     minHeight: 50,
     paddingHorizontal: 16,
   },
-  searchIcon: {
-    color: "#6b7280",
-    fontSize: 24,
-  },
   searchText: {
     color: "#111827",
     flex: 1,
     fontSize: 17,
     fontWeight: "700",
   },
-  cameraIcon: {
-    color: "#6b7280",
-    fontSize: 22,
-  },
   categoryStrip: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
   },
-  categoryLink: {
+  categoryPill: {
+    alignItems: "center",
     borderColor: "#777b80",
     borderRadius: 19,
     borderWidth: 1,
+    flexDirection: "row",
+    gap: 7,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+  },
+  categoryLink: {
     color: "#374151",
     fontSize: 14,
     fontWeight: "700",
-    paddingHorizontal: 13,
-    paddingVertical: 8,
+  },
+  homeHeader: {
+    gap: 4,
+  },
+  homeTitle: {
+    color: "#111827",
+    fontSize: 30,
+    fontWeight: "800",
+  },
+  homeSubtitle: {
+    color: "#5f6875",
+    fontSize: 15,
+  },
+  homeSection: {
+    gap: 12,
+  },
+  homeListingCard: {
+    backgroundColor: "#ffffff",
+    borderColor: "#d6dbe2",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    padding: 12,
+  },
+  argusHomeCard: {
+    backgroundColor: "#f9fbff",
+    borderColor: "#cddbf9",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    padding: 12,
+  },
+  homeListingImage: {
+    backgroundColor: "#edf0f4",
+    borderRadius: 8,
+    height: 126,
+    width: 126,
+  },
+  homeListingBody: {
+    flex: 1,
+    gap: 6,
+  },
+  homeListingTitle: {
+    color: "#111827",
+    fontSize: 15,
+    fontWeight: "800",
+    lineHeight: 21,
+  },
+  sellerLine: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+  sellerAvatar: {
+    backgroundColor: "#edf0f4",
+    borderRadius: 10,
+    color: "#374151",
+    fontSize: 11,
+    fontWeight: "800",
+    height: 20,
+    lineHeight: 20,
+    textAlign: "center",
+    width: 20,
+  },
+  homeMeta: {
+    color: "#5f6875",
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  homePrice: {
+    color: "#111827",
+    fontSize: 20,
+    fontWeight: "800",
+  },
+  notVerifiedPill: {
+    alignSelf: "flex-start",
+    backgroundColor: "#edf0f4",
+    borderRadius: 4,
+    color: "#596273",
+    fontSize: 12,
+    fontWeight: "800",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  homeProofGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
   },
   sellingHero: {
     backgroundColor: "#f5f9ff",
@@ -854,6 +1074,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#111827",
     borderRadius: 22,
+    flexDirection: "row",
+    gap: 8,
     minHeight: 44,
     justifyContent: "center",
   },
@@ -885,27 +1107,44 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
   },
-  storageNote: {
-    color: "#374151",
-    fontSize: 13,
-    fontWeight: "800",
-  },
   verifierButton: {
     alignItems: "flex-start",
   },
-  detailsPanel: {
+  snapshotPanel: {
     backgroundColor: "#ffffff",
     borderColor: "#d6dbe2",
     borderRadius: 8,
     borderWidth: 1,
-    gap: 8,
+    gap: 10,
     padding: 12,
   },
+  snapshotHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  snapshotStatus: {
+    color: "#111827",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  metricGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
   proofDetail: {
+    backgroundColor: "#f9fbff",
     borderBottomColor: "#edf0f4",
-    borderBottomWidth: 1,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#edf0f4",
+    flexBasis: "48%",
+    flexGrow: 1,
     gap: 3,
-    paddingBottom: 8,
+    minHeight: 66,
+    padding: 10,
   },
   proofLabel: {
     color: "#5f6875",
@@ -919,11 +1158,29 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     lineHeight: 19,
   },
-  detailHeading: {
-    color: "#111827",
+  solanaAction: {
+    alignItems: "center",
+    backgroundColor: "#3665f3",
+    borderRadius: 8,
+    minHeight: 42,
+    justifyContent: "center",
+  },
+  solanaActionDisabled: {
+    alignItems: "center",
+    backgroundColor: "#edf0f4",
+    borderRadius: 8,
+    minHeight: 42,
+    justifyContent: "center",
+  },
+  solanaActionText: {
+    color: "#ffffff",
     fontSize: 14,
     fontWeight: "800",
-    marginTop: 4,
+  },
+  solanaActionTextDisabled: {
+    color: "#596273",
+    fontSize: 14,
+    fontWeight: "800",
   },
   listingRow: {
     flexDirection: "row",
@@ -962,6 +1219,9 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   productBadgeRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
   },
   sellerPanel: {
@@ -987,13 +1247,14 @@ const styles = StyleSheet.create({
     height: 8,
     width: "92%",
   },
-  evidenceLine: {
-    color: "#374151",
-    fontSize: 14,
-    lineHeight: 22,
+  evidenceStatusRow: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 8,
   },
-  limitLine: {
-    color: "#5f6875",
+  evidenceStatusText: {
+    color: "#374151",
+    flex: 1,
     fontSize: 14,
     lineHeight: 22,
   },
@@ -1022,16 +1283,6 @@ const styles = StyleSheet.create({
     gap: 2,
     minHeight: 52,
     justifyContent: "center",
-  },
-  bottomIcon: {
-    color: "#111827",
-    fontSize: 20,
-    fontWeight: "800",
-  },
-  bottomIconActive: {
-    color: "#3665f3",
-    fontSize: 20,
-    fontWeight: "800",
   },
   bottomLabel: {
     color: "#374151",

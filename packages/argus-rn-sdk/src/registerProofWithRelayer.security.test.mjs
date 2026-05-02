@@ -1895,13 +1895,21 @@ async function treatsVerifierNetworkErrorsAsFailedWithoutClaims() {
 }
 
 function verifierTrustBoundaryCopyNamesSponsorship() {
-  const sources = [
-    readFileSync(new URL("../../../apps/marketplace-demo/src/App.tsx", import.meta.url), "utf8"),
+  const marketplaceApp = readFileSync(
+    new URL("../../../apps/marketplace-demo/src/App.tsx", import.meta.url),
+    "utf8",
+  );
+  const documentationSources = [
     readFileSync(new URL("../../../apps/marketplace-demo/index.html", import.meta.url), "utf8"),
     readFileSync(new URL("../../../api/relayer/README.md", import.meta.url), "utf8"),
   ];
 
-  for (const source of sources) {
+  assert.match(marketplaceApp, /SDK checks/);
+  assert.match(marketplaceApp, /Authorized relayer/);
+  assert.match(marketplaceApp, /Open Solana Explorer/);
+  assert.doesNotMatch(marketplaceApp, /authorized production relayer fee payer/);
+
+  for (const source of documentationSources) {
     assert.match(source, /authorized production relayer fee payer/);
     assert.match(source, /sponsored gas/);
   }
@@ -2983,26 +2991,30 @@ function rendersLocalDemoProofSummaryAsPreview() {
 }
 
 function rejectsUntrustedMarketplaceDemoDetailsOverclaim() {
-  const { CaptureProofDetails } = loadMarketplaceDemoAppForTest();
+  const { VerificationSnapshot } = loadMarketplaceDemoAppForTest();
   const proof = buildLocalDemoProof({
     proofRecord: undefined,
     relayer: undefined,
   });
-  const renderedText = collectRenderedText(CaptureProofDetails({ proof })).join("\n");
+  const renderedText = collectRenderedText(
+    VerificationSnapshot({ proof, backendStatus: "pending", isRegistering: false }),
+  ).join("\n");
 
   assert.equal(isArgusLocalDemoProof(proof), false);
-  assert.match(renderedText, /Claimed proof ID/);
-  assert.match(renderedText, /Claimed manifest hash/);
-  assert.match(renderedText, /Claimed transaction reference/);
-  assert.match(renderedText, /Claimed evidence level/);
-  assert.match(renderedText, /Level 1 - Demo preview \(not verified\)/);
-  assert.doesNotMatch(renderedText, /Simulator proof ID/);
-  assert.doesNotMatch(renderedText, /Simulator transaction/);
+  assert.match(renderedText, /Unverified/);
+  assert.match(renderedText, /Level 1 - Demo preview/);
+  assert.doesNotMatch(renderedText, /Registry[\s\S]*active/);
+  assert.match(renderedText, /Solana record pending/);
+  assert.doesNotMatch(renderedText, /Claimed proof ID/);
+  assert.doesNotMatch(renderedText, /Claimed manifest hash/);
+  assert.doesNotMatch(renderedText, /Claimed transaction reference/);
+  assert.doesNotMatch(renderedText, /Claimed evidence level/);
   assert.doesNotMatch(renderedText, /Simulator preview/);
+  assert.doesNotMatch(renderedText, /Open Solana Explorer/);
 }
 
 function rejectsSponsoredMarketplaceSimulatorDetailsOverclaim() {
-  const { CaptureProofDetails } = loadMarketplaceDemoAppForTest();
+  const { VerificationSnapshot } = loadMarketplaceDemoAppForTest();
   const proof = buildLocalDemoProof({
     relayer: ARGUS_AUTHORIZED_RELAYER,
     feePayer: ARGUS_AUTHORIZED_RELAYER,
@@ -3014,27 +3026,27 @@ function rejectsSponsoredMarketplaceSimulatorDetailsOverclaim() {
     },
   });
   const renderedText = collectRenderedText(
-    CaptureProofDetails({ proof, isSimulatorPreview: true }),
+    VerificationSnapshot({ proof, backendStatus: "pending", isRegistering: false, isSimulatorPreview: true }),
   ).join("\n");
 
   assert.equal(isArgusLocalDemoProof(proof), false);
-  assert.match(renderedText, /Claimed proof ID/);
-  assert.match(renderedText, /Level 1 - Demo preview \(not verified\)/);
-  assert.doesNotMatch(renderedText, /Simulator preview proof ID/);
-  assert.doesNotMatch(renderedText, /Preview manifest hash/);
+  assert.match(renderedText, /Unverified/);
+  assert.match(renderedText, /Level 1 - Demo preview/);
+  assert.doesNotMatch(renderedText, /Simulator preview/);
+  assert.doesNotMatch(renderedText, /Open Solana Explorer/);
 }
 
 function rendersMarketplaceSimulatorDetailsAsPreview() {
-  const { CaptureProofDetails } = loadMarketplaceDemoAppForTest();
+  const { VerificationSnapshot } = loadMarketplaceDemoAppForTest();
   const proof = createMarketplaceSimulatorProof();
   const renderedText = collectRenderedText(
-    CaptureProofDetails({ proof, isSimulatorPreview: true }),
+    VerificationSnapshot({ proof, backendStatus: "local_only", isRegistering: false, isSimulatorPreview: true }),
   ).join("\n");
 
   assert.equal(proof.sponsoredGas, false);
-  assert.match(renderedText, /Simulator preview proof ID/);
-  assert.match(renderedText, /Preview manifest hash/);
-  assert.match(renderedText, /Simulator preview transaction reference/);
+  assert.match(renderedText, /Simulator preview/);
+  assert.match(renderedText, /Level 1 - Demo preview/);
+  assert.match(renderedText, /Solana record pending/);
   assert.doesNotMatch(renderedText, /Claimed proof ID/);
 }
 
@@ -3047,7 +3059,8 @@ function hidesGenericProofSummaryForMarketplaceSimulatorFallback() {
   const renderedText = collectRenderedText(MarketplaceDemoApp({})).join("\n");
 
   assert.match(renderedText, /Simulator Preview/);
-  assert.match(renderedText, /Simulator preview proof ID/);
+  assert.match(renderedText, /Simulator preview/);
+  assert.match(renderedText, /Solana record pending/);
   assert.doesNotMatch(renderedText, /Generic SDK proof summary/);
 }
 
@@ -3058,38 +3071,39 @@ function rendersGenericProofSummaryOutsideMarketplaceSimulatorFallback() {
 
   assert.equal(isArgusLocalDemoProof(proof), true);
   assert.match(renderedText, /Local Demo Preview/);
-  assert.match(renderedText, /Generic SDK proof summary/);
+  assert.match(renderedText, /Local preview/);
+  assert.doesNotMatch(renderedText, /Generic SDK proof summary/);
 }
 
 function rendersMarketplaceProductionDetailsWithTransactionReference() {
-  const { CaptureProofDetails } = loadMarketplaceDemoAppForTest();
+  const { VerificationSnapshot } = loadMarketplaceDemoAppForTest();
   const nativeProof = buildProof();
   const proof = {
     ...nativeProof,
     ...buildRegistration(nativeProof),
   };
-  const renderedText = collectRenderedText(CaptureProofDetails({ proof })).join("\n");
+  const renderedText = collectRenderedText(
+    VerificationSnapshot({ proof, backendStatus: "registered", isRegistering: false }),
+  ).join("\n");
 
   assert.equal(isArgusProductionProof(proof), true);
-  assert.match(renderedText, /Reported transaction reference/);
-  assert.match(renderedText, /Evidence level/);
+  assert.match(renderedText, /Verified/);
   assert.match(renderedText, /Level 2 - Native capture evidence/);
-  assert.doesNotMatch(renderedText, /Reported Solana transaction/);
+  assert.match(renderedText, /Open Solana Explorer/);
   assert.doesNotMatch(renderedText, /Claimed transaction reference/);
 }
 
 function rendersMarketplaceLocalDemoDetailsAsPreview() {
-  const { CaptureProofDetails } = loadMarketplaceDemoAppForTest();
+  const { VerificationSnapshot } = loadMarketplaceDemoAppForTest();
   const proof = buildLocalDemoProof();
-  const renderedText = collectRenderedText(CaptureProofDetails({ proof })).join("\n");
+  const renderedText = collectRenderedText(
+    VerificationSnapshot({ proof, backendStatus: "local_only", isRegistering: false }),
+  ).join("\n");
 
   assert.equal(isArgusLocalDemoProof(proof), true);
-  assert.match(renderedText, /Local demo preview proof ID/);
-  assert.match(renderedText, /Preview manifest hash/);
-  assert.match(renderedText, /Simulated preview transaction reference/);
-  assert.match(renderedText, /Preview evidence level/);
+  assert.match(renderedText, /Local preview/);
   assert.match(renderedText, /Level 1 - Demo preview/);
-  assert.doesNotMatch(renderedText, /Solana transaction/);
+  assert.match(renderedText, /Solana record pending/);
   assert.doesNotMatch(renderedText, /Verified Capture/);
 }
 
@@ -3109,8 +3123,8 @@ function rejectsUnverifiedRelayerClaimInMarketplaceStatusPanel() {
 
   assert.equal(proof.proofRecord.relayerAuthorized, true);
   assert.equal(isArgusProductionProof(proof), false);
-  assert.match(renderedText, /Authorized fee payer \+ sponsored gas[\s\S]*pending/);
-  assert.doesNotMatch(renderedText, /Authorized fee payer \+ sponsored gas[\s\S]*captured/);
+  assert.match(renderedText, /Authorized relayer[\s\S]*pending/);
+  assert.doesNotMatch(renderedText, /Authorized relayer[\s\S]*captured/);
 }
 
 function keepsLevel4MarketplaceStatusPendingWithoutTrustedRootMarker() {
@@ -3160,8 +3174,8 @@ function keepsLevel4MarketplaceStatusPendingWithoutTrustedRootMarker() {
 
   assert.equal(isArgusProductionProof(proof), true);
   assert.equal(getArgusEvidenceLevel(proof), "level_3_keystore_signature");
-  assert.match(renderedText, /Trusted device attestation \(Level 4\)\s*:\s*pending/);
-  assert.doesNotMatch(renderedText, /Trusted device attestation \(Level 4\)\s*:\s*captured/);
+  assert.match(renderedText, /Level 4 attestation\s*:\s*pending/);
+  assert.doesNotMatch(renderedText, /Level 4 attestation\s*:\s*captured/);
 }
 
 function rejectsLocalDemoStatusWithNonCanonicalPhotoBase64() {
@@ -3404,12 +3418,7 @@ function loadMarketplaceDemoAppForTest(initialStateValues = []) {
         ArgusBadge: () => null,
         ArgusCamera: () => null,
         ArgusProofLink: () => null,
-        ArgusProofSummary: ({ proof }) =>
-          React.createElement(
-            "Text",
-            null,
-            proof ? "Generic SDK proof summary" : "Generic SDK proof pending",
-          ),
+        ArgusProofSummary: () => null,
         ARGUS_LOCAL_DEMO_RELAYER,
         configure() {},
         getArgusEvidenceLevel,
@@ -3457,6 +3466,11 @@ function loadMarketplaceDemoAppForTest(initialStateValues = []) {
     if (specifier === "./demoProof") {
       return { createMarketplaceSimulatorProof };
     }
+    if (specifier === "./FigmaIcon") {
+      return {
+        FigmaIcon: () => null,
+      };
+    }
     if (specifier === "./localListingStore") {
       return {
         buildListingDraft({ backendMessage, backendStatus, listing, proof, uploadSource }) {
@@ -3479,6 +3493,9 @@ function loadMarketplaceDemoAppForTest(initialStateValues = []) {
           return draft;
         },
       };
+    }
+    if (specifier.startsWith("../assets/")) {
+      return { uri: specifier };
     }
     throw new Error(`Unexpected test import: ${specifier}`);
   };

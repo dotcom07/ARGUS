@@ -22,7 +22,11 @@ const { createDemoCaptureProof, verifyDemoProof } = await import(
 
 const requiredFiles = [
   "apps/marketplace-demo/src/App.tsx",
+  "apps/marketplace-demo/src/FigmaIcon.tsx",
   "apps/marketplace-demo/src/localListingStore.ts",
+  "apps/marketplace-demo/assets/ebay/Nintendo New 3DS.webp",
+  "apps/marketplace-demo/assets/ebay/Ricoh WG-M1 Digital Camera.webp",
+  "apps/marketplace-demo/assets/ebay/nike air jordan 1 mid.webp",
   "apps/marketplace-demo/package.json",
   "packages/argus-rn-sdk/src/index.ts",
   "packages/argus-rn-sdk/src/openCaptureSessionWithRelayer.ts",
@@ -47,11 +51,13 @@ for (const filePath of requiredFiles) {
 
 const marketplaceRn = [
   readFileSync("apps/marketplace-demo/src/App.tsx", "utf8"),
+  readFileSync("apps/marketplace-demo/src/FigmaIcon.tsx", "utf8"),
   readFileSync("apps/marketplace-demo/src/data/listing.ts", "utf8"),
   readFileSync("apps/marketplace-demo/src/localListingStore.ts", "utf8"),
 ].join("\n");
 assert.match(marketplaceRn, /ArgusCamera/);
 assert.match(marketplaceRn, /ArgusBadge/);
+assert.match(marketplaceRn, /react-native-svg/);
 assert.match(marketplaceRn, /registerProofWithRelayer/);
 assert.match(marketplaceRn, /Buy It Now/);
 assert.match(marketplaceRn, /or Best Offer/);
@@ -64,15 +70,21 @@ assert.match(marketplaceRn, /ebay_argus\.local_listing/);
 assert.match(marketplaceRn, /Listing preview/);
 assert.match(marketplaceRn, /Item page preview/);
 assert.match(marketplaceRn, /bottomTabs/);
-assert.match(marketplaceRn, /Authorized fee payer \+ sponsored gas/);
-assert.match(marketplaceRn, /authorized production relayer fee payer/);
-assert.match(marketplaceRn, /production relayer \+ pinned registry/);
-assert.match(marketplaceRn, /Claimed proof ID/);
-assert.match(marketplaceRn, /Claimed manifest hash/);
-assert.match(marketplaceRn, /Claimed transaction reference/);
-assert.match(marketplaceRn, /Claimed evidence level/);
-assert.match(marketplaceRn, /Public key evidence \(Level 3\)/);
-assert.match(marketplaceRn, /Trusted device attestation \(Level 4\)/);
+assert.match(marketplaceRn, /Nintendo New 3DS LL XL/);
+assert.match(marketplaceRn, /Ricoh WG-M1 Digital Camera/);
+assert.match(marketplaceRn, /nike air jordan 1 mid/);
+assert.match(marketplaceRn, /Argus not verified/);
+assert.match(marketplaceRn, /Your Argus listing/);
+assert.match(marketplaceRn, /VerificationSnapshot/);
+assert.match(marketplaceRn, /Open Solana Explorer/);
+assert.match(marketplaceRn, /Open Solana scan/);
+assert.match(marketplaceRn, /SDK checks/);
+assert.match(marketplaceRn, /Native CameraX/);
+assert.match(marketplaceRn, /Level 3 key/);
+assert.match(marketplaceRn, /Level 4 attestation/);
+assert.match(marketplaceRn, /Authorized relayer/);
+assert.doesNotMatch(marketplaceRn, /Proof limitations/);
+assert.doesNotMatch(marketplaceRn, /Evidence summary/);
 
 const marketplaceWeb = [
   readFileSync("apps/marketplace-demo/index.html", "utf8"),
@@ -138,7 +150,7 @@ assert.match(rnSdkCreateCaptureProof, /callNativeGetAppIdentityHash/);
 assert.match(rnSdkCreateCaptureProof, /openCaptureSessionWithRelayer/);
 
 const rnSdkCamera = readFileSync("packages/argus-rn-sdk/src/ArgusCamera.tsx", "utf8");
-assert.match(rnSdkCamera, /Open Argus camera/);
+assert.match(rnSdkCamera, /Capture with Argus SDK/);
 assert.doesNotMatch(rnSdkCamera, /Take verified photo/);
 
 const relayerSubmit = readFileSync("api/relayer/submitRegisterProof.mjs", "utf8");

@@ -23,7 +23,8 @@
   "dependencies": {
     "@argus/rn-sdk": "file:packages/argus-rn-sdk",
     "react": "19.2.3",
-    "react-native": "0.85.2"
+    "react-native": "0.85.2",
+    "react-native-svg": "^15.15.4"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
