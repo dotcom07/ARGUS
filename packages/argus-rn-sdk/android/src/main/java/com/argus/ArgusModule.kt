@@ -299,15 +299,15 @@ class ArgusModule(private val reactContext: ReactApplicationContext) :
             is Number -> canonicalNumber(value)
             is Map<*, *> -> value.entries
                 .sortedBy { it.key.toString() }
-                .joinToString(prefix = "{", postfix = "}") { entry ->
+                .joinToString(separator = ",", prefix = "{", postfix = "}") { entry ->
                     "${quoteJson(entry.key.toString())}:${canonicalJson(entry.value)}"
                 }
-            is Iterable<*> -> value.joinToString(prefix = "[", postfix = "]") { item ->
+            is Iterable<*> -> value.joinToString(separator = ",", prefix = "[", postfix = "]") { item ->
                 canonicalJson(item)
             }
             else -> {
                 if (value.javaClass.isArray) {
-                    (0 until Array.getLength(value)).joinToString(prefix = "[", postfix = "]") { index ->
+                    (0 until Array.getLength(value)).joinToString(separator = ",", prefix = "[", postfix = "]") { index ->
                         canonicalJson(Array.get(value, index))
                     }
                 } else {
