@@ -24,6 +24,7 @@ const requiredFiles = [
   "apps/marketplace-demo/src/App.tsx",
   "apps/marketplace-demo/src/FigmaIcon.tsx",
   "apps/marketplace-demo/src/localListingStore.ts",
+  "apps/marketplace-demo/assets/ebay/ebay.svg",
   "apps/marketplace-demo/assets/ebay/Nintendo New 3DS.webp",
   "apps/marketplace-demo/assets/ebay/Ricoh WG-M1 Digital Camera.webp",
   "apps/marketplace-demo/assets/ebay/nike air jordan 1 mid.webp",
@@ -58,15 +59,21 @@ const marketplaceRn = [
 assert.match(marketplaceRn, /ArgusCamera/);
 assert.match(marketplaceRn, /ArgusBadge/);
 assert.match(marketplaceRn, /react-native-svg/);
+assert.match(marketplaceRn, /EbayWordmark/);
+assert.match(marketplaceRn, /marginLeft: "auto"/);
 assert.match(marketplaceRn, /registerProofWithRelayer/);
 assert.match(marketplaceRn, /Buy It Now/);
 assert.match(marketplaceRn, /or Best Offer/);
 assert.match(marketplaceRn, /Capture proof pending/);
 assert.doesNotMatch(marketplaceRn, /Verified Capture pending/);
-assert.match(marketplaceRn, /Local Demo Preview/);
-assert.match(marketplaceRn, /Simulator Preview/);
+assert.match(marketplaceRn, /Argus demo preview/);
+assert.match(marketplaceRn, /Local preview/);
+assert.match(marketplaceRn, /Simulator preview/);
 assert.match(marketplaceRn, /Upload local demo photo/);
+assert.match(marketplaceRn, /New listing/);
+assert.match(marketplaceRn, /TextInput/);
 assert.match(marketplaceRn, /ebay_argus\.local_listing/);
+assert.match(marketplaceRn, /ebay_argus\.local_listings/);
 assert.match(marketplaceRn, /Listing preview/);
 assert.match(marketplaceRn, /Item page preview/);
 assert.match(marketplaceRn, /bottomTabs/);

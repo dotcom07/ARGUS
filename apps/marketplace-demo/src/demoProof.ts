@@ -6,7 +6,14 @@ import type { ArgusProof } from "../../../packages/argus-rn-sdk/src/types.ts";
 
 // kr: createMarketplaceSimulatorProof는 native module이 없는 RN preview에서도 데모 흐름을 보여주기 위한 fallback입니다.
 // en: createMarketplaceSimulatorProof is a fallback that shows the demo flow in RN previews without the native module.
-export function createMarketplaceSimulatorProof(): ArgusProof {
+export function createMarketplaceSimulatorProof(
+  listingMetadata: {
+    condition?: string;
+    id?: string;
+    price?: string;
+    title?: string;
+  } = {},
+): ArgusProof {
   const capturedAtMs = Date.now();
   const capturedAt = new Date(capturedAtMs).toISOString();
   const proofSeed = String(capturedAtMs);
@@ -17,7 +24,13 @@ export function createMarketplaceSimulatorProof(): ArgusProof {
   const partnerIdHash = demoHex("partner:recommerce-demo");
   const nonce = demoHex(`nonce:${proofSeed}`);
   const appIdentityHash = demoHex("app:com.argus.marketplace.demo");
-  const metadataJson = "{\"listingId\":\"ebay-argus-camera-001\",\"source\":\"ebay_argus\"}";
+  const metadataJson = JSON.stringify({
+    condition: listingMetadata.condition ?? "",
+    listingId: listingMetadata.id ?? "ebay-argus-user-listing",
+    price: listingMetadata.price ?? "",
+    source: "ebay_argus",
+    title: listingMetadata.title ?? "",
+  });
   const cameraEvidenceJson = `{"captureSurface":"android-native-camera-stub","capturedAtMs":${capturedAtMs},"noGalleryImport":true}`;
   const deviceIntegrityJson = `{"androidEvidenceLevel":1,"appIdentityHash":"${appIdentityHash}","appIdentityHashPresent":true,"attestationCertificateChainPem":[],"attestationStatus":"level_4_unsupported_fell_back_to_level_1_demo","evidenceLevel":"level_1_demo","hardwareAttestation":{"fallbackLevel":1,"reason":"local_demo_no_android_keystore","supported":false},"keystorePublicKeyPem":"","keystoreSignature":false,"level3KeystoreSignature":false,"level4HardwareAttestation":false,"motionSnapshotPresent":true}`;
   const canonicalManifestJson = [

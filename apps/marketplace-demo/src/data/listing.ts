@@ -27,20 +27,20 @@ export type CaptureProof = {
 // kr: listing은 marketplace 화면에 표시할 중고 상품 정보를 담습니다.
 // en: listing holds the used-item details shown on the marketplace screen.
 export const listing: MarketplaceListing = {
-  listingId: "ebay-argus-camera-001",
-  id: "ebay-argus-camera-001",
-  title: "Vintage Kodak Instamatic camera and 35mm film set",
-  category: "Cameras & Photo",
-  condition: "Used - Excellent",
-  price: "$74.00",
-  photoUrl: "https://images.unsplash.com/photo-1602140829587-6ec082f87e49?auto=format&fit=crop&w=900&q=80",
+  listingId: "ebay-argus-user-listing",
+  id: "ebay-argus-user-listing",
+  title: "",
+  category: "Marketplace listing",
+  condition: "",
+  price: "",
+  photoUrl: "",
   offerLabel: "Buy It Now or Best Offer",
-  shipping: "Free 3 day shipping from Portland, OR",
+  shipping: "",
   seller: {
-    name: "PDXCameraShelf",
-    score: "1,842 sales",
-    positiveRate: "99.2% positive",
-    location: "Portland, OR",
+    name: "You",
+    score: "New seller",
+    positiveRate: "Argus demo seller",
+    location: "",
   },
 };
 

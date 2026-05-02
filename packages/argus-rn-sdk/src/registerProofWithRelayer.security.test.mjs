@@ -3413,6 +3413,12 @@ function loadMarketplaceDemoAppForTest(initialStateValues = []) {
         View: "View",
       };
     }
+    if (specifier === "react-native-svg") {
+      return {
+        default: "Svg",
+        Path: "Path",
+      };
+    }
     if (specifier === "../../../packages/argus-rn-sdk/src") {
       return {
         ArgusBadge: () => null,
