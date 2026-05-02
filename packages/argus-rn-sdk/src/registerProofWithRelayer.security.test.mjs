@@ -78,6 +78,7 @@ try {
   await rejectsRegistrationWithMismatchedProofRecordTimestamp();
   await rejectsRegistrationWithCapturedAtMismatch();
   await rejectsRegistrationWithInvalidRegisteredAt();
+  await reportsRelayerClientErrorBody();
   await rejectsRegistrationWhenProofObjectMutatesDuringRelayerCall();
   await rejectsRegistrationWithUnsafeSolanaTx();
   await rejectsRegistrationWithNoAuthorityRelayerUrl();
@@ -923,6 +924,22 @@ async function rejectsRegistrationWithInvalidRegisteredAt() {
   await assert.rejects(
     () => registerProofWithRelayer(config, proof),
     /registeredAt/,
+  );
+}
+
+async function reportsRelayerClientErrorBody() {
+  const proof = buildProof();
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 400,
+    async text() {
+      return JSON.stringify({ error: "deviceIntegrityJson must be canonical JSON" });
+    },
+  });
+
+  await assert.rejects(
+    () => registerProofWithRelayer(config, proof),
+    /Argus relayer returned 400: deviceIntegrityJson must be canonical JSON/,
   );
 }
 

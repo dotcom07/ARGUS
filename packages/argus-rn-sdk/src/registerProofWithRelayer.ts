@@ -60,12 +60,55 @@ export async function registerProofWithRelayer(
   );
 
   if (!response.ok) {
-    throw new Error(`Argus relayer returned ${response.status}`);
+    throw new Error(await buildRelayerStatusError(response));
   }
 
   const registration = (await response.json()) as RelayerRegistrationResult;
   assertRegistrationMatchesProof(config, registration, proofSnapshot);
   return registration;
+}
+
+async function buildRelayerStatusError(response: Response): Promise<string> {
+  const detail = await readRelayerErrorDetail(response);
+  return `Argus relayer returned ${response.status}${detail ? `: ${detail}` : ""}`;
+}
+
+async function readRelayerErrorDetail(response: Response): Promise<string | undefined> {
+  try {
+    const rawText = await response.text();
+    const trimmed = rawText.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      const parsedError =
+        parsed && typeof parsed === "object" && "error" in parsed
+          ? (parsed as { error?: unknown }).error
+          : undefined;
+      const parsedMessage =
+        parsed && typeof parsed === "object" && "message" in parsed
+          ? (parsed as { message?: unknown }).message
+          : undefined;
+      if (typeof parsedError === "string" && parsedError.trim()) {
+        return sanitizeRelayerErrorDetail(parsedError);
+      }
+      if (typeof parsedMessage === "string" && parsedMessage.trim()) {
+        return sanitizeRelayerErrorDetail(parsedMessage);
+      }
+    } catch {
+      // Non-JSON error bodies are still useful for dev diagnostics after sanitization.
+    }
+
+    return sanitizeRelayerErrorDetail(trimmed);
+  } catch {
+    return undefined;
+  }
+}
+
+function sanitizeRelayerErrorDetail(value: string): string {
+  return value.replace(/[\u0000-\u001f\u007f]+/g, " ").trim().slice(0, 240);
 }
 
 async function postRegistrationWithRetry(registerProofUrl: string, body: string): Promise<Response> {
