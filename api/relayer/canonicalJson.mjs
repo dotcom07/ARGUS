@@ -272,8 +272,10 @@ class CanonicalJsonParser {
 
     const rawNumber = this.text.slice(start, this.index);
     const number = Number(rawNumber);
-    if (!Number.isFinite(number) || !isCanonicalNumberLexeme(rawNumber, number)) {
-      this.fail("non-canonical or non-finite number");
+    // Android sensor floats can be emitted with Java/Kotlin lexemes that do not round-trip through
+    // JSON.stringify. Security-sensitive integer paths are checked separately with exact lexemes.
+    if (!Number.isFinite(number)) {
+      this.fail("non-finite number");
     }
 
     if (this.isCurrentNumberPath()) {
@@ -313,10 +315,6 @@ class CanonicalJsonParser {
       this.path.every((segment, index) => segment === this.numberPath[index])
     );
   }
-}
-
-function isCanonicalNumberLexeme(rawNumber, number) {
-  return rawNumber === JSON.stringify(number);
 }
 
 function isDigit(character) {

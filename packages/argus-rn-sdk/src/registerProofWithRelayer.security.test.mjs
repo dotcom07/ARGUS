@@ -34,6 +34,7 @@ const originalFetch = globalThis.fetch;
 try {
   await acceptsActiveAuthorizedAppCaptureRegistration();
   await acceptsPendingLevel4MaterialForRelayerValidation();
+  await acceptsFiniteAndroidSensorNumberLexemes();
   await rejectsRelayerSelfAttestation();
   await rejectsUnsponsoredProductionRegistration();
   await rejectsMismatchedFeePayerProductionRegistration();
@@ -253,6 +254,20 @@ async function acceptsPendingLevel4MaterialForRelayerValidation() {
     getArgusEvidenceLevelLabel(proof),
     "Level 3 - hardware attestation material pending relayer validation",
   );
+}
+
+async function acceptsFiniteAndroidSensorNumberLexemes() {
+  const baseProof = buildProof();
+  const deviceIntegrityJson = baseProof.deviceIntegrityJson
+    .replace("\"accelerometer\":[0.01,0.02,9.81]", "\"accelerometer\":[0.0100,0.0200,9.8100]")
+    .replace("\"gyroscope\":[0.001,0.002,0.003]", "\"gyroscope\":[0.0010,0.0020,0.0030]");
+  const proof = rebindProofEvidence(baseProof, { deviceIntegrityJson });
+  mockRelayerResponse(buildRegistration(proof));
+
+  const registration = await registerProofWithRelayer(config, proof);
+
+  assert.equal(registration.proofRecord?.status, "active");
+  assert.equal(isArgusProductionProof({ ...proof, ...registration }), true);
 }
 
 async function rejectsRelayerSelfAttestation() {

@@ -95,7 +95,7 @@ await rejectsInactivePartnerAllowlistEntryBeforeConsumingSession();
 await acceptsCurrentDemoRegistryAndRelayerConfig();
 await acceptsKotlinCanonicalEvidenceNumbers();
 await acceptsKotlinCanonicalControlEscapes();
-await rejectsRawFloatToStringEvidenceNumbers();
+await acceptsFiniteAndroidSensorNumberLexemes();
 await acceptsVerifierAllowlistedBasePath();
 await acceptsVerifierAllowlistedEncodedSeparatorBasePath();
 await rejectsUnauthorizedCaptureSessionPartner();
@@ -130,7 +130,7 @@ await rejectsNonFiniteManifestNumber();
 await rejectsFutureCaptureTimestamp();
 await rejectsNonCanonicalManifestWithExtraClaim();
 await rejectsNonCanonicalEvidenceJson();
-await rejectsNonCanonicalEvidenceNumber();
+await acceptsFiniteSensorNumberTrailingZeros();
 await rejectsCameraEvidenceDecimalCapturedAtMs();
 await rejectsCameraEvidenceDecimalCollectedAtMs();
 await rejectsCameraEvidenceDecimalCapturedFileBytes();
@@ -448,17 +448,17 @@ async function acceptsKotlinCanonicalControlEscapes() {
   assert.equal(result.proofRecord.status, "superseded");
 }
 
-async function rejectsRawFloatToStringEvidenceNumbers() {
+async function acceptsFiniteAndroidSensorNumberLexemes() {
   clearCaptureSessions();
-  const weakProof = rewriteProofEvidence(proof, {
+  const androidProof = rewriteProofEvidence(proof, {
     deviceIntegrityJson: buildRawFloatToStringDeviceIntegrityJson(proof),
   });
-  authorizeProofSession(weakProof);
+  authorizeProofSession(androidProof);
 
-  await assert.rejects(
-    () => registerProof(buildRequest(weakProof)),
-    /deviceIntegrityJson must be canonical JSON/,
-  );
+  const result = await registerProof(buildRequest(androidProof));
+
+  assert.equal(result.proofId, androidProof.proofId);
+  assert.equal(result.proofRecord.status, "superseded");
 }
 
 async function acceptsVerifierAllowlistedBasePath() {
@@ -980,16 +980,16 @@ async function rejectsNonCanonicalEvidenceJson() {
   );
 }
 
-async function rejectsNonCanonicalEvidenceNumber() {
+async function acceptsFiniteSensorNumberTrailingZeros() {
   clearCaptureSessions();
   const deviceIntegrityJson = buildKotlinNumberDeviceIntegrityJson(proof).replace("9.81", "9.810");
-  const weakProof = rewriteProofEvidence(proof, { deviceIntegrityJson });
-  authorizeProofSession(weakProof);
+  const androidProof = rewriteProofEvidence(proof, { deviceIntegrityJson });
+  authorizeProofSession(androidProof);
 
-  await assert.rejects(
-    () => registerProof(buildRequest(weakProof)),
-    /deviceIntegrityJson must be canonical JSON/,
-  );
+  const result = await registerProof(buildRequest(androidProof));
+
+  assert.equal(result.proofId, androidProof.proofId);
+  assert.equal(result.proofRecord.status, "superseded");
 }
 
 async function rejectsCameraEvidenceDecimalCapturedAtMs() {
@@ -1003,7 +1003,7 @@ async function rejectsCameraEvidenceDecimalCapturedAtMs() {
 
   await assert.rejects(
     () => registerProof(buildRequest(weakProof)),
-    /cameraEvidenceJson must be canonical JSON/,
+    /cameraEvidenceJson capturedAtMs must be encoded as a canonical integer/,
   );
 }
 
@@ -1019,7 +1019,7 @@ async function rejectsCameraEvidenceDecimalCollectedAtMs() {
 
   await assert.rejects(
     () => registerProof(buildRequest(weakProof)),
-    /cameraEvidenceJson must be canonical JSON/,
+    /cameraEvidenceJson collectedAtMs must be encoded as a canonical integer/,
   );
 }
 
@@ -1035,7 +1035,7 @@ async function rejectsCameraEvidenceDecimalCapturedFileBytes() {
 
   await assert.rejects(
     () => registerProof(buildRequest(weakProof)),
-    /cameraEvidenceJson must be canonical JSON/,
+    /cameraEvidenceJson capturedFileBytes must be encoded as a canonical integer/,
   );
 }
 
@@ -1050,7 +1050,7 @@ async function rejectsMotionEvidenceDecimalWindow() {
 
   await assert.rejects(
     () => registerProof(buildRequest(weakProof)),
-    /deviceIntegrityJson must be canonical JSON/,
+    /deviceIntegrityJson motionSnapshot.sampleWindowMs must be encoded as a canonical integer/,
   );
 }
 
@@ -1065,7 +1065,7 @@ async function rejectsMotionEvidenceDecimalSampledAt() {
 
   await assert.rejects(
     () => registerProof(buildRequest(weakProof)),
-    /deviceIntegrityJson must be canonical JSON/,
+    /deviceIntegrityJson motionSnapshot.sampledAtMs must be encoded as a canonical integer/,
   );
 }
 

@@ -1,5 +1,9 @@
 import { getConfig } from "./config.ts";
-import { canonicalJsonNumberLexeme, isCanonicalJson } from "./canonicalJson.ts";
+import {
+  canonicalJsonNumberLexeme,
+  canonicalJsonValidationError,
+  isCanonicalJson,
+} from "./canonicalJson.ts";
 import type { ArgusEvidenceLevel, ArgusIntegrityLevel, ArgusProof } from "./types";
 
 export const ARGUS_REGISTRY_PROGRAM_ID = "STmkbEWTmfBJR2mDHrbvKNjo2spT6mPU9668mw2hMaL";
@@ -301,6 +305,9 @@ export function getProductionCaptureFieldDiagnostics(proof?: ArgusProof | null) 
       metadataCanonical: isCanonicalJson(proof?.metadataJson),
       cameraEvidenceCanonical: isCanonicalJson(proof?.cameraEvidenceJson),
       deviceIntegrityCanonical: isCanonicalJson(proof?.deviceIntegrityJson),
+      metadataError: canonicalJsonValidationError(proof?.metadataJson),
+      cameraEvidenceError: canonicalJsonValidationError(proof?.cameraEvidenceJson),
+      deviceIntegrityError: canonicalJsonValidationError(proof?.deviceIntegrityJson),
     },
     photoPolicy: {
       base64Decoded: Boolean(photoBytes),

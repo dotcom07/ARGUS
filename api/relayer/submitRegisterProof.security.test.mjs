@@ -109,8 +109,8 @@ await rejectsNonCanonicalManifestBeforeSolana();
 await rejectsNonCanonicalEvidenceJsonBeforeSolana();
 await acceptsKotlinCanonicalEvidenceNumbersBeforeSolana();
 await acceptsKotlinCanonicalControlEscapesBeforeSolana();
-await rejectsRawFloatToStringEvidenceNumbersBeforeSolana();
-await rejectsNonCanonicalEvidenceNumberBeforeSolana();
+await acceptsFiniteAndroidSensorNumberLexemesBeforeSolana();
+await acceptsFiniteSensorNumberTrailingZerosBeforeSolana();
 await rejectsCameraEvidenceDecimalCapturedAtMsBeforeSolana();
 await rejectsCameraEvidenceDecimalCollectedAtMsBeforeSolana();
 await rejectsCameraEvidenceDecimalCapturedFileBytesBeforeSolana();
@@ -500,29 +500,33 @@ async function acceptsKotlinCanonicalControlEscapesBeforeSolana() {
   });
 }
 
-async function rejectsRawFloatToStringEvidenceNumbersBeforeSolana() {
-  const weakProof = rewriteProofEvidence(proof, {
+async function acceptsFiniteAndroidSensorNumberLexemesBeforeSolana() {
+  const androidProof = rewriteProofEvidence(proof, {
     deviceIntegrityJson: buildRawFloatToStringDeviceIntegrityJson(proof),
   });
   clearCaptureSessions();
-  authorizeProofSession(weakProof);
+  authorizeProofSession(androidProof);
 
-  await assert.rejects(
-    () => submitRegisterProof(buildRequest(weakProof)),
-    /deviceIntegrityJson must be canonical JSON/,
-  );
+  await withoutSolanaRpc(async () => {
+    await assert.rejects(
+      () => submitRegisterProof(buildRequest(androidProof)),
+      /SOLANA_RPC_URL or ANCHOR_PROVIDER_URL is required/,
+    );
+  });
 }
 
-async function rejectsNonCanonicalEvidenceNumberBeforeSolana() {
+async function acceptsFiniteSensorNumberTrailingZerosBeforeSolana() {
   const deviceIntegrityJson = buildKotlinNumberDeviceIntegrityJson(proof).replace("9.81", "9.810");
-  const weakProof = rewriteProofEvidence(proof, { deviceIntegrityJson });
+  const androidProof = rewriteProofEvidence(proof, { deviceIntegrityJson });
   clearCaptureSessions();
-  authorizeProofSession(weakProof);
+  authorizeProofSession(androidProof);
 
-  await assert.rejects(
-    () => submitRegisterProof(buildRequest(weakProof)),
-    /deviceIntegrityJson must be canonical JSON/,
-  );
+  await withoutSolanaRpc(async () => {
+    await assert.rejects(
+      () => submitRegisterProof(buildRequest(androidProof)),
+      /SOLANA_RPC_URL or ANCHOR_PROVIDER_URL is required/,
+    );
+  });
 }
 
 async function rejectsCameraEvidenceDecimalCapturedAtMsBeforeSolana() {
@@ -536,7 +540,7 @@ async function rejectsCameraEvidenceDecimalCapturedAtMsBeforeSolana() {
 
   await assert.rejects(
     () => submitRegisterProof(buildRequest(weakProof)),
-    /cameraEvidenceJson must be canonical JSON/,
+    /cameraEvidenceJson capturedAtMs must be encoded as a canonical integer/,
   );
 }
 
@@ -552,7 +556,7 @@ async function rejectsCameraEvidenceDecimalCollectedAtMsBeforeSolana() {
 
   await assert.rejects(
     () => submitRegisterProof(buildRequest(weakProof)),
-    /cameraEvidenceJson must be canonical JSON/,
+    /cameraEvidenceJson collectedAtMs must be encoded as a canonical integer/,
   );
 }
 
@@ -568,7 +572,7 @@ async function rejectsCameraEvidenceDecimalCapturedFileBytesBeforeSolana() {
 
   await assert.rejects(
     () => submitRegisterProof(buildRequest(weakProof)),
-    /cameraEvidenceJson must be canonical JSON/,
+    /cameraEvidenceJson capturedFileBytes must be encoded as a canonical integer/,
   );
 }
 
@@ -583,7 +587,7 @@ async function rejectsMotionEvidenceDecimalWindowBeforeSolana() {
 
   await assert.rejects(
     () => submitRegisterProof(buildRequest(weakProof)),
-    /deviceIntegrityJson must be canonical JSON/,
+    /deviceIntegrityJson motionSnapshot.sampleWindowMs must be encoded as a canonical integer/,
   );
 }
 
@@ -598,7 +602,7 @@ async function rejectsMotionEvidenceDecimalSampledAtBeforeSolana() {
 
   await assert.rejects(
     () => submitRegisterProof(buildRequest(weakProof)),
-    /deviceIntegrityJson must be canonical JSON/,
+    /deviceIntegrityJson motionSnapshot.sampledAtMs must be encoded as a canonical integer/,
   );
 }
 

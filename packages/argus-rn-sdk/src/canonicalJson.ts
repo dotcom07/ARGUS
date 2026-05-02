@@ -1,14 +1,21 @@
 export function isCanonicalJson(value?: string): boolean {
+  return canonicalJsonValidationError(value) === undefined;
+}
+
+export function canonicalJsonValidationError(value?: string): string | undefined {
   if (typeof value !== "string" || value.length === 0) {
-    return false;
+    return "canonical JSON must be a non-empty string";
   }
 
   try {
     const parser = new CanonicalJsonParser(value);
     parser.parseValue();
-    return parser.isAtEnd();
-  } catch {
-    return false;
+    if (!parser.isAtEnd()) {
+      return "unexpected trailing data";
+    }
+    return undefined;
+  } catch (error) {
+    return error instanceof Error ? error.message : "invalid canonical JSON";
   }
 }
 
@@ -273,8 +280,10 @@ class CanonicalJsonParser {
 
     const rawNumber = this.text.slice(start, this.index);
     const number = Number(rawNumber);
-    if (!Number.isFinite(number) || !isCanonicalNumberLexeme(rawNumber, number)) {
-      this.fail("non-canonical or non-finite number");
+    // Android sensor floats can be emitted with Java/Kotlin lexemes that do not round-trip through
+    // JSON.stringify. Security-sensitive integer paths are checked separately with exact lexemes.
+    if (!Number.isFinite(number)) {
+      this.fail("non-finite number");
     }
 
     if (this.isCurrentNumberPath()) {
@@ -314,22 +323,6 @@ class CanonicalJsonParser {
       this.path.every((segment, index) => segment === this.numberPath?.[index])
     );
   }
-}
-
-function isCanonicalNumberLexeme(rawNumber: string, number: number): boolean {
-  if (rawNumber === JSON.stringify(number)) {
-    return true;
-  }
-
-  if (Object.is(number, -0) && rawNumber === "-0.0") {
-    return true;
-  }
-
-  if (/^-?(?:0|[1-9]\d*)\.0$/.test(rawNumber)) {
-    return true;
-  }
-
-  return /^-?(?:0|[1-9]\d*)\.(?:0|\d*[1-9])E-?(?:[1-9]\d*)$/.test(rawNumber);
 }
 
 function isDigit(character: string | undefined): boolean {
