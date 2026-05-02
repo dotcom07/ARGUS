@@ -92,8 +92,8 @@ Implemented:
 
 Still prototype:
 
-- The relayer code is function-level; there is no standalone HTTP API server yet.
-- Production proof-bundle storage and verifier API are not implemented.
+- The relayer has a minimal HTTP server for demo use.
+- Proof-bundle storage is file-based demo storage; production storage is not implemented.
 - Android currently mirrors Rust proof rules in Kotlin through `ArgusRustBridge.kt`; JNI/UniFFI binding is the intended hardening path.
 - The registry and proof policy currently support the demo use case `marketplace_listing`.
 - Local/browser demos use preview data and must not be treated as production verification.
