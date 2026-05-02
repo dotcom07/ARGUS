@@ -130,12 +130,12 @@ class ArgusCameraActivity : ComponentActivity() {
         root.addView(focusOverlay, matchParentParams())
         root.addView(buildTopControls(), FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(86),
+            dp(109),
             Gravity.TOP,
         ))
         root.addView(buildBottomControls(), FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(210),
+            dp(220),
             Gravity.BOTTOM,
         ))
         setContentView(root)
@@ -161,87 +161,117 @@ class ArgusCameraActivity : ComponentActivity() {
         return true
     }
 
-    private fun buildTopControls(): LinearLayout {
-        flashButton = topControlButton("Flash off").apply {
+    private fun buildTopControls(): FrameLayout {
+        val controls = FrameLayout(this).apply {
+            setBackgroundColor(0x99000000.toInt())
+            setPadding(dp(16), dp(24), dp(16), dp(12))
+        }
+        val leftControls = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            orientation = LinearLayout.HORIZONTAL
+        }
+        flashButton = topControlButton("⚡/", "Flash off").apply {
             setOnClickListener { cycleFlashMode() }
         }
-        gridButton = topControlButton("Grid on").apply {
+        gridButton = topControlButton("▦", "Grid on").apply {
             setOnClickListener {
                 gridOverlay.isGridEnabled = !gridOverlay.isGridEnabled
                 updateGridButton()
             }
         }
+        leftControls.addView(flashButton, LinearLayout.LayoutParams(dp(36), dp(36)))
+        leftControls.addView(gridButton, LinearLayout.LayoutParams(dp(36), dp(36)).apply {
+            marginStart = dp(10)
+        })
 
-        return LinearLayout(this).apply {
+        val photoLabel = TextView(this).apply {
             gravity = Gravity.CENTER
-            orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(0xCC000000.toInt())
-            setPadding(dp(10), dp(22), dp(10), dp(10))
-            addView(flashButton, weightedTopItemParams())
-            addView(topLabel("12M"), weightedTopItemParams())
-            addView(topLabel("PHOTO"), weightedTopItemParams())
-            addView(gridButton, weightedTopItemParams())
-            updateFlashButton()
-            updateGridButton()
+            text = "ARGUS"
+            textSize = 15f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(ACCENT_COLOR)
+            letterSpacing = 0.08f
         }
+        val closeButton = topControlButton("×", "Cancel capture").apply {
+            textSize = 26f
+            setOnClickListener {
+                setResult(RESULT_CANCELED)
+                finish()
+            }
+        }
+
+        controls.addView(leftControls, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            dp(48),
+            Gravity.START or Gravity.BOTTOM,
+        ))
+        controls.addView(photoLabel, FrameLayout.LayoutParams(
+            dp(112),
+            dp(40),
+            Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM,
+        ))
+        controls.addView(closeButton, FrameLayout.LayoutParams(dp(40), dp(40), Gravity.END or Gravity.BOTTOM))
+        updateFlashButton()
+        updateGridButton()
+        return controls
     }
 
     private fun buildBottomControls(): FrameLayout {
         val controls = FrameLayout(this).apply {
-            setBackgroundColor(0xCC000000.toInt())
+            setBackgroundColor(0x99000000.toInt())
         }
+
         val zoomStrip = LinearLayout(this).apply {
             gravity = Gravity.CENTER
             orientation = LinearLayout.HORIZONTAL
-            background = roundedBackground(0xAA241510.toInt(), 26)
-            setPadding(dp(12), dp(4), dp(12), dp(4))
+            background = roundedBackground(0x66000000, 32)
+            setPadding(dp(8), dp(3), dp(8), dp(3))
         }
         zoomButtons = ZOOM_PRESETS.map { preset ->
             TextView(this).apply {
                 gravity = Gravity.CENTER
                 text = preset.label
-                textSize = 18f
+                textSize = 13f
                 typeface = Typeface.DEFAULT_BOLD
-                setTextColor(Color.WHITE)
+                setTextColor(0x99FFFFFF.toInt())
                 setOnClickListener { setZoomRatio(preset.ratio) }
             }
         }
         zoomButtons.forEach { button ->
-            zoomStrip.addView(button, LinearLayout.LayoutParams(dp(56), dp(42)))
+            zoomStrip.addView(button, LinearLayout.LayoutParams(dp(38), dp(38)))
         }
 
         flipButton = TextView(this).apply {
             gravity = Gravity.CENTER
             text = "↻"
-            textSize = 34f
+            textSize = 30f
             setTextColor(Color.WHITE)
-            background = circleBackground(0x88241510.toInt())
+            background = circleBackground(0x66000000)
             contentDescription = "Switch camera"
             setOnClickListener { switchCamera() }
         }
         val modeLabel = TextView(this).apply {
             gravity = Gravity.CENTER
             text = "PHOTO"
-            textSize = 22f
+            textSize = 13f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.WHITE)
+            setTextColor(ACCENT_COLOR)
+            letterSpacing = 0.08f
         }
 
-        controls.addView(zoomStrip, FrameLayout.LayoutParams(dp(258), dp(52), Gravity.CENTER_HORIZONTAL or Gravity.TOP).apply {
-            topMargin = dp(8)
+        controls.addView(zoomStrip, FrameLayout.LayoutParams(dp(178), dp(42), Gravity.CENTER_HORIZONTAL or Gravity.TOP).apply {
+            topMargin = dp(10)
         })
-        controls.addView(captureButton, FrameLayout.LayoutParams(dp(92), dp(92), Gravity.CENTER_HORIZONTAL or Gravity.TOP).apply {
-            topMargin = dp(74)
+        controls.addView(modeLabel, FrameLayout.LayoutParams(dp(160), dp(28), Gravity.CENTER_HORIZONTAL or Gravity.TOP).apply {
+            topMargin = dp(62)
         })
-        controls.addView(flipButton, FrameLayout.LayoutParams(dp(74), dp(74), Gravity.END or Gravity.TOP).apply {
-            topMargin = dp(84)
+        controls.addView(captureButton, FrameLayout.LayoutParams(dp(86), dp(86), Gravity.CENTER_HORIZONTAL or Gravity.TOP).apply {
+            topMargin = dp(92)
+        })
+        controls.addView(flipButton, FrameLayout.LayoutParams(dp(56), dp(56), Gravity.END or Gravity.TOP).apply {
+            topMargin = dp(108)
             marginEnd = dp(32)
         })
-        controls.addView(modeLabel, FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(42),
-            Gravity.BOTTOM,
-        ))
         return controls
     }
 
@@ -383,8 +413,8 @@ class ArgusCameraActivity : ComponentActivity() {
             val selected = abs(currentZoomRatio - ratio) < 0.12f
             button.isEnabled = supported
             button.alpha = if (supported) 1f else 0.35f
-            button.setTextColor(if (selected) Color.BLACK else Color.WHITE)
-            button.background = if (selected) circleBackground(Color.WHITE) else null
+            button.setTextColor(if (selected) ACCENT_COLOR else 0x99FFFFFF.toInt())
+            button.background = if (selected) circleBackground(0xAA000000.toInt()) else null
         }
     }
 
@@ -531,24 +561,15 @@ class ArgusCameraActivity : ComponentActivity() {
         )
     }
 
-    private fun weightedTopItemParams(): LinearLayout.LayoutParams {
-        return LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
-    }
-
-    private fun topControlButton(description: String): TextView {
-        return topLabel("").apply {
-            contentDescription = description
-            textSize = 24f
-        }
-    }
-
-    private fun topLabel(value: String): TextView {
+    private fun topControlButton(value: String, description: String): TextView {
         return TextView(this).apply {
             gravity = Gravity.CENTER
             text = value
+            contentDescription = description
             textSize = 20f
             setTextColor(Color.WHITE)
             typeface = Typeface.DEFAULT_BOLD
+            background = circleBackground(0x44FFFFFF)
         }
     }
 
@@ -587,6 +608,7 @@ class ArgusCameraActivity : ComponentActivity() {
         const val EXTRA_PARTNER_ID = "argusPartnerId"
         const val EXTRA_USE_CASE = "argusUseCase"
         private const val CAMERA_PERMISSION_REQUEST = 4207
+        private const val ACCENT_COLOR = -469174
         private val ZOOM_PRESETS = listOf(
             ZoomPreset(".6", 0.6f),
             ZoomPreset("1x", 1f),
