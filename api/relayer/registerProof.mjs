@@ -1,5 +1,8 @@
 import { createHash } from "node:crypto";
-import { validateAndroidEvidenceLevel } from "./androidEvidencePolicy.mjs";
+import {
+  summarizeAndroidAttestationRootDiagnostics,
+  validateAndroidEvidenceLevel,
+} from "./androidEvidencePolicy.mjs";
 import { assertCanonicalJsonBytes, canonicalJsonNumberLexeme } from "./canonicalJson.mjs";
 import { assertPartnerAppAuthorized } from "./partnerPolicy.mjs";
 import { assertPhotoBytesBase64TextLimit, decodeCanonicalPhotoBytes } from "./photoBytesPolicy.mjs";
@@ -37,13 +40,30 @@ export async function registerProof(request) {
   });
   const relayerDeviceEvidenceSummary = buildRelayerDeviceEvidenceSummary(androidEvidenceDecision);
   if (androidEvidenceDecision.level4AttestationVerdict?.attempted) {
+    const attestationRootDiagnostics = summarizeAndroidAttestationRootDiagnostics(
+      JSON.parse(normalizedRequest.deviceIntegrityJson),
+    );
     console.info("[Argus relayer] Android attestation root verdict", {
       proofId: shortValue(normalizedRequest.proofId),
       acceptedLevel: androidEvidenceDecision.level4AttestationVerdict.acceptedLevel,
+      attestationCertificateChainPemCount:
+        attestationRootDiagnostics.attestationCertificateChainPemCount,
+      configuredAttestationRootFingerprintCount:
+        attestationRootDiagnostics.configuredAttestationRootFingerprintCount,
+      configuredAttestationRootFingerprintError:
+        attestationRootDiagnostics.configuredAttestationRootFingerprintError,
       evidenceLevel: androidEvidenceDecision.level4AttestationVerdict.evidenceLevel,
       failureReason: androidEvidenceDecision.level4AttestationVerdict.failureReason,
+      submittedAttestationRootFingerprintError:
+        attestationRootDiagnostics.submittedAttestationRootFingerprintError,
+      submittedAttestationRootFingerprintSha256:
+        attestationRootDiagnostics.submittedAttestationRootFingerprintSha256,
       trustedAttestationRootConfigured:
         androidEvidenceDecision.level4AttestationVerdict.trustedAttestationRootConfigured === true,
+      trustedAttestationRootConfiguredError:
+        androidEvidenceDecision.level4AttestationVerdict.trustedAttestationRootConfiguredError,
+      trustedAttestationRootFingerprintSha256:
+        androidEvidenceDecision.level4AttestationVerdict.trustedAttestationRootFingerprintSha256,
       trustedAttestationRootValidated:
         androidEvidenceDecision.level4AttestationVerdict.trustedAttestationRootValidated === true,
     });

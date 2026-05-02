@@ -90,6 +90,47 @@ export function validateAndroidEvidenceLevel({ deviceIntegrity, manifest, reques
   };
 }
 
+export function summarizeAndroidAttestationRootDiagnostics(deviceIntegrity) {
+  const hardwareAttestation =
+    deviceIntegrity?.hardwareAttestation &&
+    typeof deviceIntegrity.hardwareAttestation === "object" &&
+    !Array.isArray(deviceIntegrity.hardwareAttestation)
+      ? deviceIntegrity.hardwareAttestation
+      : undefined;
+  const certificateChainPem = Array.isArray(hardwareAttestation?.certificateChainPem)
+    ? hardwareAttestation.certificateChainPem
+    : [];
+  const diagnostics = {
+    attestationCertificateChainPemCount: certificateChainPem.length,
+    configuredAttestationRootFingerprintCount: undefined,
+    configuredAttestationRootFingerprintError: undefined,
+    submittedAttestationRootFingerprintSha256: undefined,
+    submittedAttestationRootFingerprintError: undefined,
+  };
+
+  try {
+    diagnostics.configuredAttestationRootFingerprintCount =
+      configuredAndroidAttestationRootFingerprints().size;
+  } catch (error) {
+    diagnostics.configuredAttestationRootFingerprintError =
+      error instanceof Error ? error.message : "Android attestation trust root config is invalid";
+  }
+
+  const submittedRootPem = certificateChainPem[certificateChainPem.length - 1];
+  if (isNonEmptyString(submittedRootPem)) {
+    try {
+      diagnostics.submittedAttestationRootFingerprintSha256 = sha256Hex(
+        new X509Certificate(normalizePemBlock(submittedRootPem)).raw,
+      );
+    } catch {
+      diagnostics.submittedAttestationRootFingerprintError =
+        "submitted Android attestation root certificate is not verifier-compatible";
+    }
+  }
+
+  return diagnostics;
+}
+
 export function buildAndroidKeystoreSignedPayloadJson({ deviceIntegrity, manifest, request }) {
   // kr: signature 자체는 deviceIntegrityJson 안에 들어가므로, self-reference를 피하기 위해 unsigned device evidence hash를 서명합니다.
   // en: The signature lives inside deviceIntegrityJson, so sign the unsigned device-evidence hash to avoid a self-reference.
