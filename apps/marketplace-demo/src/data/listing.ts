@@ -5,6 +5,7 @@ export type MarketplaceListing = {
   category: string;
   condition: string;
   price: string;
+  photoUrl: string;
   offerLabel: string;
   shipping: string;
   seller: {
@@ -26,19 +27,20 @@ export type CaptureProof = {
 // kr: listing은 marketplace 화면에 표시할 중고 상품 정보를 담습니다.
 // en: listing holds the used-item details shown on the marketplace screen.
 export const listing: MarketplaceListing = {
-  listingId: "argus-listing-500cm",
-  id: "argus-listing-500cm",
-  title: "Hasselblad 500C/M Medium Format Film Camera Kit",
+  listingId: "ebay-argus-camera-001",
+  id: "ebay-argus-camera-001",
+  title: "Vintage Kodak Instamatic camera and 35mm film set",
   category: "Cameras & Photo",
   condition: "Used - Excellent",
-  price: "$1,480.00",
+  price: "$74.00",
+  photoUrl: "https://images.unsplash.com/photo-1602140829587-6ec082f87e49?auto=format&fit=crop&w=900&q=80",
   offerLabel: "Buy It Now or Best Offer",
-  shipping: "Free 3 day shipping from Austin, TX",
+  shipping: "Free 3 day shipping from Portland, OR",
   seller: {
-    name: "FrontierCameraCo",
+    name: "PDXCameraShelf",
     score: "1,842 sales",
     positiveRate: "99.2% positive",
-    location: "Austin, TX",
+    location: "Portland, OR",
   },
 };
 

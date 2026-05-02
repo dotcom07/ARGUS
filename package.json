@@ -5,7 +5,6 @@
   "workspaces": [
     "api/relayer",
     "apps/marketplace-demo",
-    "apps/verifier-web",
     "packages/argus-rn-sdk"
   ],
   "scripts": {
@@ -19,7 +18,7 @@
     "devnet:deploy:init": "node scripts/argus-devnet.mjs deploy --init",
     "devnet:init": "node scripts/argus-devnet.mjs init",
     "relayer:server": "node api/relayer/server.mjs",
-    "test": "node scripts/verify-demo.mjs && node api/relayer/registerProof.security.test.mjs && node api/relayer/submitRegisterProof.security.test.mjs && node packages/argus-rn-sdk/src/demoProof.security.test.mjs && node packages/argus-rn-sdk/src/registerProofWithRelayer.security.test.mjs && cargo test --manifest-path crates/argus-core/Cargo.toml && cargo test --manifest-path programs/argus-registry/Cargo.toml && node --check apps/marketplace-demo/index.js && node --check apps/verifier-web/index.js && node scripts/register-proof.mjs"
+    "test": "node scripts/verify-demo.mjs && node api/relayer/registerProof.security.test.mjs && node api/relayer/submitRegisterProof.security.test.mjs && node packages/argus-rn-sdk/src/demoProof.security.test.mjs && node packages/argus-rn-sdk/src/registerProofWithRelayer.security.test.mjs && cargo test --manifest-path crates/argus-core/Cargo.toml && cargo test --manifest-path programs/argus-registry/Cargo.toml && node --check apps/marketplace-demo/index.js && node scripts/register-proof.mjs"
   },
   "dependencies": {
     "@argus/rn-sdk": "file:packages/argus-rn-sdk",

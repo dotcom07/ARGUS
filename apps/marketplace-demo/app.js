@@ -1,29 +1,33 @@
 import { createDemoCaptureProof } from "../../packages/argus-rn-sdk/src/demoProof.mjs";
 
 const ARGUS_PROOF_ID_PATTERN = /^[0-9a-f]{64}$/;
-const DEMO_VERIFIER_QUERY_PREFIX = "../verifier-web/index.html?proofId=";
+const DEMO_VERIFIER_DEEP_LINK_PREFIX = "argus://verify/local-simulator/";
 
 const listing = {
-  listingId: "argus-listing-500cm",
-  title: "Hasselblad 500C/M Medium Format Film Camera Kit",
+  listingId: "ebay-argus-camera-001",
+  title: "Vintage Kodak Instamatic camera and 35mm film set",
   condition: "used-excellent",
 };
 
 const elements = {
-  captureButton: document.querySelector("#captureButton"),
-  evidenceSummary: document.querySelector("#evidenceSummary"),
-  evidenceLevel: document.querySelector("#evidenceLevel"),
-  manifestHash: document.querySelector("#manifestHash"),
-  solanaTx: document.querySelector("#solanaTx"),
-  verifierLink: document.querySelector("#verifierLink"),
-  photoBadge: document.querySelector("#photoBadge"),
-  verifiedPill: document.querySelector("#verifiedPill"),
-  cameraStatus: document.querySelector("#cameraStatus"),
-  motionStatus: document.querySelector("#motionStatus"),
   appStatus: document.querySelector("#appStatus"),
+  cameraStatus: document.querySelector("#cameraStatus"),
+  captureButton: document.querySelector("#captureButton"),
+  evidenceLevel: document.querySelector("#evidenceLevel"),
+  evidenceSummary: document.querySelector("#evidenceSummary"),
+  gasStatus: document.querySelector("#gasStatus"),
   keyCertStatus: document.querySelector("#keyCertStatus"),
   level4Status: document.querySelector("#level4Status"),
-  gasStatus: document.querySelector("#gasStatus"),
+  manifestHash: document.querySelector("#manifestHash"),
+  motionStatus: document.querySelector("#motionStatus"),
+  photoBadge: document.querySelector("#photoBadge"),
+  saveStatus: document.querySelector("#saveStatus"),
+  solanaTx: document.querySelector("#solanaTx"),
+  stepCamera: document.querySelector("#stepCamera"),
+  stepProof: document.querySelector("#stepProof"),
+  stepPublish: document.querySelector("#stepPublish"),
+  verifiedPill: document.querySelector("#verifiedPill"),
+  verifierLink: document.querySelector("#verifierLink"),
 };
 
 elements.captureButton.addEventListener("click", handleVerifiedCapture);
@@ -38,6 +42,7 @@ async function handleVerifiedCapture() {
       metadata: listing,
     });
 
+    saveListingDraft(proof);
     renderProof(proof);
   } catch (error) {
     setCaptureState("failed");
@@ -47,7 +52,7 @@ async function handleVerifiedCapture() {
 
 function renderProof(proof) {
   // Browser preview data is local and simulated, so every status stays demo-labeled and muted.
-  elements.captureButton.textContent = "Create another local demo preview";
+  elements.captureButton.textContent = "Capture again";
   elements.captureButton.disabled = false;
   elements.photoBadge.textContent = "Local Demo Preview";
   elements.photoBadge.className = "photo-badge pending";
@@ -58,11 +63,19 @@ function renderProof(proof) {
   elements.evidenceLevel.textContent = "Level 1 - Demo preview";
   elements.evidenceSummary.textContent =
     "Local demo preview only: simulated camera, motion, and app identity commitments";
+  elements.saveStatus.textContent =
+    "Local photo + JSON saved; listing and item page proof badges are ready for preview";
+  elements.saveStatus.className = "save-status saved";
+
+  markStepDone(elements.stepCamera, "Camera evidence committed");
+  markStepDone(elements.stepProof, "Manifest matched locally");
+  markStepDone(elements.stepPublish, "Badge attached to listing");
+
   const safeVerificationUrl = getSafeDemoVerificationUrl(proof);
   if (safeVerificationUrl) {
     elements.verifierLink.href = safeVerificationUrl;
     elements.verifierLink.className = "verifier-link";
-    elements.verifierLink.textContent = "Open demo preview verifier";
+    elements.verifierLink.textContent = "Proof deep link saved";
     elements.verifierLink.removeAttribute("aria-disabled");
     elements.verifierLink.removeAttribute("tabindex");
   } else {
@@ -78,7 +91,8 @@ function renderProof(proof) {
   elements.appStatus.textContent = "Simulated app identity hash: committed";
   elements.keyCertStatus.textContent = "Public key evidence: not present in local preview";
   elements.level4Status.textContent = "Trusted device attestation (Level 4): not in local preview";
-  elements.gasStatus.textContent = "No authorized production registry write: simulated relayer only";
+  elements.gasStatus.textContent =
+    "Authorized production relayer fee payer and sponsored gas: simulated relayer only";
 }
 
 function setCaptureState(state) {
@@ -86,12 +100,27 @@ function setCaptureState(state) {
     elements.captureButton.textContent = "Creating local demo preview...";
     elements.captureButton.disabled = true;
     elements.evidenceSummary.textContent = "Collecting simulated local demo preview commitments";
+    elements.saveStatus.textContent = "Saving local photo bytes and metadata JSON...";
+    elements.saveStatus.className = "save-status";
+    elements.stepCamera.className = "step-card active";
+    updateStepCopy(elements.stepCamera, "Camera session open");
   }
 
   if (state === "failed") {
     elements.captureButton.textContent = "Try again";
     elements.captureButton.disabled = false;
+    updateStepCopy(elements.stepCamera, "Capture failed");
   }
+}
+
+function markStepDone(step, copy) {
+  step.className = "step-card done";
+  updateStepCopy(step, copy);
+}
+
+function updateStepCopy(step, copy) {
+  const status = step.querySelector("small");
+  status.textContent = copy;
 }
 
 function shortenHash(hash) {
@@ -110,7 +139,24 @@ function getSafeDemoVerificationUrl(proof) {
     return undefined;
   }
 
-  // The browser demo verifier reads localStorage only; enable a link only when it is bound to this proof ID.
-  const expectedVerificationUrl = `${DEMO_VERIFIER_QUERY_PREFIX}${proofId}`;
+  // The browser preview stores the proof locally and keeps the mobile deep link bound to this proof ID.
+  const expectedVerificationUrl = `${DEMO_VERIFIER_DEEP_LINK_PREFIX}${proofId}`;
   return verificationUrl === expectedVerificationUrl ? verificationUrl : undefined;
+}
+
+function saveListingDraft(proof) {
+  const draft = {
+    backendMessage:
+      "Local demo photo and JSON saved. Native Android capture can register this proof bundle with the Argus backend.",
+    backendStatus: "local_only",
+    listing,
+    metadataJson: proof.metadataJson || "{}",
+    photoBytesBase64: proof.photoBytesBase64 || "",
+    photoUri: "assets/product-camera.jpg",
+    proof,
+    savedAt: new Date().toISOString(),
+    uploadSource: "local_upload",
+  };
+
+  localStorage.setItem("ebay_argus.local_listing", JSON.stringify(draft));
 }

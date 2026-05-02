@@ -17,7 +17,7 @@ export function createMarketplaceSimulatorProof(): ArgusProof {
   const partnerIdHash = demoHex("partner:recommerce-demo");
   const nonce = demoHex(`nonce:${proofSeed}`);
   const appIdentityHash = demoHex("app:com.argus.marketplace.demo");
-  const metadataJson = "{\"listingId\":\"argus-vintage-camera-001\",\"source\":\"argus-marketplace-demo\"}";
+  const metadataJson = "{\"listingId\":\"ebay-argus-camera-001\",\"source\":\"ebay_argus\"}";
   const cameraEvidenceJson = `{"captureSurface":"android-native-camera-stub","capturedAtMs":${capturedAtMs},"noGalleryImport":true}`;
   const deviceIntegrityJson = `{"androidEvidenceLevel":1,"appIdentityHash":"${appIdentityHash}","appIdentityHashPresent":true,"attestationCertificateChainPem":[],"attestationStatus":"level_4_unsupported_fell_back_to_level_1_demo","evidenceLevel":"level_1_demo","hardwareAttestation":{"fallbackLevel":1,"reason":"local_demo_no_android_keystore","supported":false},"keystorePublicKeyPem":"","keystoreSignature":false,"level3KeystoreSignature":false,"level4HardwareAttestation":false,"motionSnapshotPresent":true}`;
   const canonicalManifestJson = [

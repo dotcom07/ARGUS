@@ -3,66 +3,101 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Argus Recommerce Demo</title>
+    <title>ebay_argus</title>
+    <link rel="icon" href="./assets/ebay_argus.png" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <header class="market-header">
-      <a class="brand" href="./index.html" aria-label="Argus recommerce home">
-        <img src="../../x_images/Argus_logo.png" alt="" />
-        <span>re:market</span>
+    <header class="app-header">
+      <a class="brand" href="./index.html" aria-label="ebay_argus home">
+        <span class="ebay-word" aria-label="eBay">
+          <span class="ebay-red">e</span><span class="ebay-blue">b</span><span class="ebay-yellow">a</span><span class="ebay-green">y</span>
+        </span>
+        <img src="./assets/ebay_argus.png" alt="" />
+        <span class="argus-word">argus</span>
       </a>
+
       <form class="search-bar">
-        <select aria-label="Category">
-          <option>All Categories</option>
-          <option>Cameras</option>
-          <option>Electronics</option>
-          <option>Collectibles</option>
-        </select>
-        <input value="vintage camera capture verification" aria-label="Search" />
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M10.8 4a6.8 6.8 0 0 1 5.38 10.96l3.43 3.43-1.41 1.41-3.43-3.43A6.8 6.8 0 1 1 10.8 4Zm0 2a4.8 4.8 0 1 0 0 9.6 4.8 4.8 0 0 0 0-9.6Z" />
+        </svg>
+        <input value="pre-owned cameras with verified photos" aria-label="Search" />
         <button type="button">Search</button>
       </form>
+
       <nav class="account-nav" aria-label="Account">
-        <a href="#">Sell</a>
         <a href="#">Watchlist</a>
+        <a href="#">Selling</a>
         <a href="#">Cart</a>
       </nav>
     </header>
 
     <nav class="category-strip" aria-label="Marketplace categories">
       <a href="#">Saved</a>
-      <a href="#">Electronics</a>
+      <a href="#">Selling</a>
+      <a href="#">Deals</a>
       <a href="#">Cameras</a>
-      <a href="#">Sneakers</a>
-      <a href="#">Luxury</a>
-      <a href="#">Local pickup</a>
+      <a href="#">Collectibles</a>
+      <a href="#">Refurbished</a>
     </nav>
 
-    <main class="listing-shell">
+    <main class="app-frame">
+      <section class="sell-flow" aria-label="Verified listing workflow">
+        <div class="section-kicker">Selling</div>
+        <h1>List an item</h1>
+        <p>Example capture-provenance flow for a marketplace listing photo.</p>
+        <button id="captureButton" class="capture-action" type="button">
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M8.4 5 9.8 3h4.4l1.4 2H19a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3h3.4Zm3.6 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z" />
+          </svg>
+          Start camera capture
+        </button>
+        <p id="saveStatus" class="save-status">Local photo and JSON waiting for capture</p>
+
+        <div class="flow-steps" aria-label="Listing steps">
+          <div id="stepCamera" class="step-card active">
+            <span>1</span>
+            <strong>Photo</strong>
+            <small>Camera capture pending</small>
+          </div>
+          <div id="stepProof" class="step-card">
+            <span>2</span>
+            <strong>ARGUS check</strong>
+            <small>Verifier pending</small>
+          </div>
+          <div id="stepPublish" class="step-card">
+            <span>3</span>
+            <strong>Ready to list</strong>
+            <small>Proof badge attaches here</small>
+          </div>
+        </div>
+      </section>
+
       <section class="gallery-panel" aria-label="Listing photos">
         <div class="photo-stage">
-          <img src="./assets/listing-camera.svg" alt="Vintage film camera listing" />
+          <img src="./assets/product-camera.jpg" alt="Vintage camera and film listing" />
           <div id="photoBadge" class="photo-badge pending">Capture pending</div>
         </div>
         <div class="thumb-row" aria-label="Photo thumbnails">
-          <button class="thumb active" type="button"><img src="./assets/listing-camera.svg" alt="" /></button>
-          <button class="thumb" type="button"><img src="../../x_images/Argus.png" alt="" /></button>
-          <button class="thumb placeholder" type="button">+</button>
+          <button class="thumb active" type="button"><img src="./assets/product-camera.jpg" alt="" /></button>
+          <button class="thumb" type="button"><img src="./assets/product-watch.jpg" alt="" /></button>
+          <button class="thumb" type="button"><img src="./assets/product-bag.jpg" alt="" /></button>
+          <button class="thumb add" type="button" aria-label="Add another photo">+</button>
         </div>
       </section>
 
       <section class="listing-main" aria-label="Listing details">
-        <p class="eyebrow">Pre-owned · Local seller · Ships from Austin, TX</p>
-        <h1 id="listingTitle">Hasselblad 500C/M Medium Format Film Camera Kit</h1>
+        <p class="eyebrow">Pre-owned - Local seller - Ships from Portland, OR</p>
+        <h2 id="listingTitle">Vintage Kodak Instamatic camera and 35mm film set</h2>
         <div class="trust-row">
-          <span class="condition-pill">Used · Excellent</span>
+          <span class="condition-pill">Used - Excellent</span>
           <span id="verifiedPill" class="verified-pill muted">Local demo preview pending</span>
         </div>
         <div class="price-row">
-          <strong>$1,480.00</strong>
+          <strong>$74.00</strong>
           <span>or Best Offer</span>
         </div>
-        <div class="shipping-line">Free 3 day shipping · Buyer protection eligible</div>
+        <div class="shipping-line">Free 3 day shipping - Buyer protection eligible</div>
 
         <div class="actions-row">
           <button class="primary-action" type="button">Buy It Now</button>
@@ -71,11 +106,8 @@
         </div>
 
         <section class="argus-panel" aria-label="Argus capture panel">
-          <div>
-            <h2>Listing photo provenance</h2>
-            <p>Example capture-provenance flow for a marketplace listing photo.</p>
-          </div>
-          <button id="captureButton" class="capture-action" type="button">Create local demo preview</button>
+          <h3>ARGUS proof</h3>
+          <p class="proof-note">Local photo bytes and JSON are saved on this device before the app contacts the backend.</p>
           <dl class="proof-grid">
             <div>
               <dt>Manifest hash</dt>
@@ -94,34 +126,84 @@
               <dd id="evidenceSummary">Local demo preview commitments: simulated camera, motion, app identity</dd>
             </div>
           </dl>
-          <a id="verifierLink" class="verifier-link disabled" aria-disabled="true" tabindex="-1">Verifier pending</a>
+          <a id="verifierLink" class="verifier-link disabled" aria-disabled="true" tabindex="-1">Proof deep link pending</a>
         </section>
       </section>
 
-      <aside class="seller-panel" aria-label="Seller information">
-        <div class="seller-card">
-          <h2>Seller information</h2>
-          <div class="seller-name">FrontierCameraCo</div>
-          <div class="seller-score">99.2% positive · 1,842 sales</div>
+      <aside class="seller-panel" aria-label="Seller and proof status">
+        <section class="seller-card">
+          <h3>Seller information</h3>
+          <div class="seller-name">PDXCameraShelf</div>
+          <div class="seller-score">99.2% positive - 1,842 sales</div>
           <div class="seller-meter">
             <span style="width: 92%"></span>
           </div>
-          <button type="button">Contact seller</button>
-        </div>
+          <button type="button">Message seller</button>
+        </section>
 
-        <div class="policy-card">
-          <h2>Demo preview status</h2>
+        <section class="policy-card">
+          <h3>Demo preview status</h3>
           <ul>
             <li id="cameraStatus">Camera evidence commitment: pending</li>
             <li id="motionStatus">Motion snapshot: pending</li>
             <li id="appStatus">App identity hash: pending</li>
             <li id="keyCertStatus">Public key evidence: not present in local preview</li>
             <li id="level4Status">Trusted device attestation (Level 4): not in local preview</li>
-            <li id="gasStatus">Production-pinned registry write: not run in browser demo</li>
+            <li id="gasStatus">authorized production relayer fee payer and sponsored gas: not run in browser demo</li>
           </ul>
-        </div>
+        </section>
       </aside>
+
+      <section class="product-rail" aria-label="Pre-loved picks">
+        <div class="rail-header">
+          <h2>Browse pre-loved picks</h2>
+          <a href="#">See all</a>
+        </div>
+        <div class="product-grid">
+          <article class="product-card">
+            <img src="./assets/product-watch.jpg" alt="Vintage wristwatch" />
+            <strong>Orient dress watch</strong>
+            <span>Used - Great</span>
+            <b>$128.50</b>
+          </article>
+          <article class="product-card">
+            <img src="./assets/product-headphones.jpg" alt="Black studio headphones" />
+            <strong>Audio-Technica studio headphones</strong>
+            <span>Open box</span>
+            <b>$59.99</b>
+          </article>
+          <article class="product-card">
+            <img src="./assets/product-bag.jpg" alt="Leather shoulder bag" />
+            <strong>Leather shoulder bag</strong>
+            <span>Pre-owned</span>
+            <b>$82.00</b>
+          </article>
+        </div>
+      </section>
     </main>
+
+    <nav class="bottom-nav" aria-label="App tabs">
+      <a href="#">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m12 3 9 8h-3v9h-5v-6h-2v6H6v-9H3l9-8Z" /></svg>
+        Home
+      </a>
+      <a href="#">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4 0-7 2.1-7 5v1h14v-1c0-2.9-3-5-7-5Z" /></svg>
+        My eBay
+      </a>
+      <a href="#">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M10.8 4a6.8 6.8 0 0 1 5.38 10.96l3.43 3.43-1.41 1.41-3.43-3.43A6.8 6.8 0 1 1 10.8 4Zm0 2a4.8 4.8 0 1 0 0 9.6 4.8 4.8 0 0 0 0-9.6Z" /></svg>
+        Search
+      </a>
+      <a href="#">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 16v-5a6 6 0 1 0-12 0v5l-2 2v1h16v-1l-2-2Zm-8 5h4a2 2 0 0 1-4 0Z" /></svg>
+        Inbox
+      </a>
+      <a class="active" href="#">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h10l6 6v10H4V4Zm9 2H6v12h12v-7h-5V6Z" /></svg>
+        Selling
+      </a>
+    </nav>
 
     <script type="module" src="./app.js"></script>
   </body>

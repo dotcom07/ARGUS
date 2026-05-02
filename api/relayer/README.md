@@ -10,7 +10,7 @@ For the local demo, `registerProof.mjs` creates a deterministic display-only Sol
 
 Verifier and client UI must treat any `proofRecord` with `relayerAuthorized: false`, a non-`active` status, or a non-production relayer as non-production even when manifest, image, and evidence hashes match. The RN SDK accepts that demo HTTP response only to finish the demo flow; it does not promote it to an Argus production proof.
 
-The static local marketplace preview is served by `npm run demo:web-preview` at `http://127.0.0.1:4173/apps/marketplace-demo/` by default, with the verifier at `http://127.0.0.1:4173/apps/verifier-web/`; the port increments if 4173 is occupied. These loopback URLs are local-development surfaces only, and the marketplace screen is one integration example rather than relayer product scope.
+The static local marketplace preview is served by `npm run demo:web-preview` at `http://127.0.0.1:4173/apps/marketplace-demo/` by default; the port increments if 4173 is occupied. This loopback URL is a local-development surface only, and the marketplace screen is one integration example rather than relayer product scope.
 
 Run the demo HTTP relayer with:
 

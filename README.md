@@ -73,8 +73,7 @@ This still is not a camera-sensor signature. The claim is narrower and practical
 | [`crates/argus-core`](./crates/argus-core) | Rust canonical proof core for manifest, hash, proof ID, registry payload, and verifier rules |
 | [`api/relayer`](./api/relayer) | Relayer/session/proof validation functions and Solana submitter path |
 | [`programs/argus-registry`](./programs/argus-registry) | Anchor program for authorized proof-record registration |
-| [`apps/marketplace-demo`](./apps/marketplace-demo) | Reference React Native and browser demo surface |
-| [`apps/verifier-web`](./apps/verifier-web) | Reference verifier UI |
+| [`apps/marketplace-demo`](./apps/marketplace-demo) | `ebay_argus` React Native app and browser preview for marketplace capture, listing, product, and proof-status demo flows |
 | [`scripts`](./scripts) | Local demo, test, and preview helpers |
 | [`x_images`](./x_images) | Logo and banner assets |
 
@@ -88,7 +87,7 @@ Implemented:
 - Rust proof core with tests for canonical manifest, hash, proof ID, byte policy, and registry payload rules.
 - Relayer validation functions for nonce/session/app identity/proof bundle checks.
 - Anchor registry program that only accepts `register_proof` from the configured authorized relayer.
-- Demo marketplace and verifier screens.
+- `ebay_argus` marketplace demo screens for capture, local listing preview, product detail proof status, and backend-assisted verification.
 
 Still prototype:
 
@@ -113,12 +112,12 @@ Argus production status requires all of these to match:
 
 Solana stores compact commitments only. Photos and raw evidence stay offchain. The chain does not inspect Android internals; it anchors the commitments accepted by the relayer so later bundle rewrites can be detected.
 
-## Verifier Demo Flow
+## Marketplace Verification Demo Flow
 
-The demo verifier can use a simple backend-assisted flow:
+The marketplace demo can show a simple backend-assisted verification flow inside the listing and product-detail surfaces:
 
 ```text
-verifier frontend -> Argus backend -> stored proof bundle + Solana devnet lookup
+ebay_argus app -> Argus backend -> stored proof bundle + Solana devnet lookup
 ```
 
 In this flow, the backend returns the stored proof bundle, recomputed match flags, the Solana transaction signature, and the proof-record account address. The frontend displays the result and links to public Solana inspection pages:
@@ -128,7 +127,7 @@ https://explorer.solana.com/tx/{signature}?cluster=devnet
 https://explorer.solana.com/address/{proofRecordPda}?cluster=devnet
 ```
 
-This is not a fully trustless client-side verifier. The demo backend is the retrieval and recomputation layer; the trust-critical commitment remains the Argus Registry record on Solana.
+This is not a fully trustless client-side verifier. The demo backend is the retrieval and recomputation layer; the trust-critical commitment remains the Argus Registry record on Solana, while the marketplace app displays the user-facing capture and verification state.
 
 ## Evidence Levels
 
@@ -181,7 +180,6 @@ The preview serves:
 
 ```text
 http://127.0.0.1:4173/apps/marketplace-demo/
-http://127.0.0.1:4173/apps/verifier-web/
 ```
 
 ## Remote Demo Backend

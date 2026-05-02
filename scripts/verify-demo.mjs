@@ -22,9 +22,8 @@ const { createDemoCaptureProof, verifyDemoProof } = await import(
 
 const requiredFiles = [
   "apps/marketplace-demo/src/App.tsx",
+  "apps/marketplace-demo/src/localListingStore.ts",
   "apps/marketplace-demo/package.json",
-  "apps/verifier-web/src/App.tsx",
-  "apps/verifier-web/package.json",
   "packages/argus-rn-sdk/src/index.ts",
   "packages/argus-rn-sdk/src/openCaptureSessionWithRelayer.ts",
   "packages/argus-rn-sdk/src/registerProofWithRelayer.ts",
@@ -46,16 +45,27 @@ for (const filePath of requiredFiles) {
   assert.equal(existsSync(filePath), true, `${filePath} must exist`);
 }
 
-const marketplaceRn = readFileSync("apps/marketplace-demo/src/App.tsx", "utf8");
+const marketplaceRn = [
+  readFileSync("apps/marketplace-demo/src/App.tsx", "utf8"),
+  readFileSync("apps/marketplace-demo/src/data/listing.ts", "utf8"),
+  readFileSync("apps/marketplace-demo/src/localListingStore.ts", "utf8"),
+].join("\n");
 assert.match(marketplaceRn, /ArgusCamera/);
 assert.match(marketplaceRn, /ArgusBadge/);
+assert.match(marketplaceRn, /registerProofWithRelayer/);
 assert.match(marketplaceRn, /Buy It Now/);
 assert.match(marketplaceRn, /or Best Offer/);
 assert.match(marketplaceRn, /Capture proof pending/);
 assert.doesNotMatch(marketplaceRn, /Verified Capture pending/);
 assert.match(marketplaceRn, /Local Demo Preview/);
 assert.match(marketplaceRn, /Simulator Preview/);
+assert.match(marketplaceRn, /Upload local demo photo/);
+assert.match(marketplaceRn, /ebay_argus\.local_listing/);
+assert.match(marketplaceRn, /Listing preview/);
+assert.match(marketplaceRn, /Item page preview/);
+assert.match(marketplaceRn, /bottomTabs/);
 assert.match(marketplaceRn, /Authorized fee payer \+ sponsored gas/);
+assert.match(marketplaceRn, /authorized production relayer fee payer/);
 assert.match(marketplaceRn, /production relayer \+ pinned registry/);
 assert.match(marketplaceRn, /Claimed proof ID/);
 assert.match(marketplaceRn, /Claimed manifest hash/);
@@ -70,7 +80,7 @@ const marketplaceWeb = [
 ].join("\n");
 assert.match(marketplaceWeb, /Local demo preview pending/);
 assert.match(marketplaceWeb, /Capture pending/);
-assert.match(marketplaceWeb, /Verifier pending/);
+assert.match(marketplaceWeb, /Proof deep link pending/);
 assert.doesNotMatch(marketplaceWeb, /Verified Capture pending/);
 assert.doesNotMatch(marketplaceWeb, /Local Demo Proof/);
 assert.match(marketplaceWeb, /Simulated preview transaction reference/);
@@ -82,89 +92,17 @@ assert.match(marketplaceWeb, /verifierLink\.removeAttribute\("tabindex"\)/);
 assert.match(marketplaceWeb, /getSafeDemoVerificationUrl/);
 assert.match(marketplaceWeb, /Verifier unavailable/);
 assert.match(marketplaceWeb, /verificationUrl === expectedVerificationUrl/);
+assert.match(marketplaceWeb, /argus:\/\/verify\/local-simulator\//);
+assert.match(marketplaceWeb, /ebay_argus\.local_listing/);
+assert.match(marketplaceWeb, /Local photo bytes and JSON are saved/);
 assert.match(marketplaceWeb, /Local demo preview only: simulated camera, motion, and app identity commitments/);
 assert.match(marketplaceWeb, /Example capture-provenance flow for a marketplace listing photo/);
 assert.match(marketplaceWeb, /Preview evidence level/);
 assert.match(marketplaceWeb, /Level 1 - Demo preview/);
 assert.match(marketplaceWeb, /Public key evidence: not present in local preview/);
 assert.match(marketplaceWeb, /Trusted device attestation \(Level 4\): not in local preview/);
-assert.match(marketplaceWeb, /Production-pinned registry write: not run in browser demo/);
-assert.match(marketplaceWeb, /No authorized production registry write: simulated relayer only/);
-
-const verifierRn = readFileSync("apps/verifier-web/src/App.tsx", "utf8");
-assert.match(verifierRn, /VerificationResult/);
-assert.match(verifierRn, /verifyProof/);
-assert.match(verifierRn, /ARGUS_DEMO_BACKEND_URL/);
-assert.match(verifierRn, /transaction reference/);
-assert.doesNotMatch(verifierRn, /Solana transaction/);
-assert.match(verifierRn, /Argus does not verify/);
-assert.match(verifierRn, /Local Demo Preview Bundle Matched/);
-assert.match(verifierRn, /production-pinned Argus Registry program/);
-assert.match(verifierRn, /trusted registry configuration/);
-assert.match(verifierRn, /authorized production relayer/);
-assert.match(verifierRn, /Image forensics or AI detection/);
-assert.match(verifierRn, /Proof pending/);
-assert.match(verifierRn, /Proof not found/);
-assert.match(verifierRn, /Proof fields pending/);
-assert.match(verifierRn, /Proof fields unavailable/);
-assert.match(verifierRn, /emptyProofFieldValue/);
-assert.match(verifierRn, /emptyValue/);
-assert.match(verifierRn, /No proof bundle was found for this proof ID/);
-assert.match(verifierRn, /Unverified proof claims/);
-assert.match(verifierRn, /Claimed proof ID/);
-assert.match(verifierRn, /Claimed manifest hash/);
-assert.match(verifierRn, /Claimed image hash commitment/);
-assert.match(verifierRn, /Claimed transaction reference/);
-assert.match(verifierRn, /Claimed relayer/);
-assert.match(verifierRn, /Claimed evidence level/);
-assert.match(verifierRn, /Public key evidence/);
-assert.match(verifierRn, /Trusted device attestation \(Level 4\)/);
-assert.match(verifierRn, /trusted-root hardware attestation/);
-assert.match(verifierRn, /Claimed record status/);
-assert.match(verifierRn, /const isDemoPreview = isDemoVerified/);
-assert.doesNotMatch(verifierRn, /isProductionVerified \|\| isDemoLikeProof/);
-
-const verifierWeb = [
-  readFileSync("apps/verifier-web/index.html", "utf8"),
-  readFileSync("apps/verifier-web/app.js", "utf8"),
-].join("\n");
-assert.match(verifierWeb, /Local Demo Preview Bundle Matched/);
-assert.match(verifierWeb, /Local demo preview bundle/);
-assert.match(verifierWeb, /production-pinned Argus Registry commitment/);
-assert.match(verifierWeb, /authorized production relayer/);
-assert.match(verifierWeb, /capture-provenance verification/);
-assert.match(verifierWeb, /Ownership, condition, or legal validity/);
-assert.match(verifierWeb, /Image forensics or AI detection/);
-assert.doesNotMatch(verifierWeb, /marketplace verification/);
-assert.doesNotMatch(verifierWeb, /Seller ownership of the item/);
-assert.doesNotMatch(verifierWeb, /Checking the local demo proof bundle/);
-assert.match(verifierWeb, /Proof pending/);
-assert.match(verifierWeb, /Proof not found/);
-assert.match(verifierWeb, /Proof fields pending/);
-assert.match(verifierWeb, /Proof fields unavailable/);
-assert.match(verifierWeb, /No proof claims are displayed/);
-assert.match(verifierWeb, /Unverified proof claims/);
-assert.match(verifierWeb, /Claimed proof ID/);
-assert.match(verifierWeb, /Claimed manifest hash/);
-assert.match(verifierWeb, /Claimed image hash commitment/);
-assert.match(verifierWeb, /Claimed transaction reference/);
-assert.match(verifierWeb, /transaction reference/i);
-assert.match(verifierWeb, /Claimed relayer/);
-assert.match(verifierWeb, /Claimed evidence level/);
-assert.match(verifierWeb, /Public key evidence/);
-assert.match(verifierWeb, /Trusted device attestation \(Level 4\)/);
-assert.match(verifierWeb, /trusted-root hardware attestation/);
-assert.match(verifierWeb, /Claimed record status/);
-
-const verifierFixture = readFileSync("apps/verifier-web/src/data/proof.ts", "utf8");
-assert.match(verifierFixture, /demo preview fixture/);
-assert.match(verifierFixture, /Demo preview manifest hash/);
-assert.match(verifierFixture, /production-pinned known Argus Registry program ID/);
-assert.doesNotMatch(verifierFixture, /demo proof/);
-
-const verifierIndex = readFileSync("apps/verifier-web/index.js", "utf8");
-assert.match(verifierIndex, /Linking\.getInitialURL/);
-assert.match(verifierIndex, /extractProofId/);
+assert.match(marketplaceWeb, /authorized production relayer fee payer and sponsored gas/i);
+assert.match(marketplaceWeb, /simulated relayer only/);
 
 const rnSdkIndex = readFileSync("packages/argus-rn-sdk/src/index.ts", "utf8");
 assert.match(rnSdkIndex, /ArgusProofSummary/);

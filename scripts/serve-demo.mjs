@@ -9,6 +9,8 @@ const preferredPort = Number(process.env.PORT || 4173);
 const mimeTypes = {
   ".css": "text/css",
   ".html": "text/html",
+  ".jpeg": "image/jpeg",
+  ".jpg": "image/jpeg",
   ".js": "text/javascript",
   ".json": "application/json",
   ".mjs": "text/javascript",
@@ -63,4 +65,3 @@ async function listen(port) {
 
 const { port } = await listen(preferredPort);
 console.log(`Argus demo server: http://127.0.0.1:${port}/apps/marketplace-demo/`);
-console.log(`Argus verifier: http://127.0.0.1:${port}/apps/verifier-web/`);

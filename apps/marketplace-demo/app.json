@@ -1,4 +1,5 @@
 {
-  "name": "ArgusMarketplaceDemo",
-  "displayName": "Argus Marketplace Demo"
+  "name": "ebay_argus",
+  "displayName": "ebay_argus",
+  "icon": "./assets/ebay_argus.png"
 }
