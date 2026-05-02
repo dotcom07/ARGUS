@@ -105,7 +105,7 @@ export function buildListingDraft({
     metadataJson: proof.metadataJson ?? "{}",
     photoBytesBase64: "",
     photoUri: listing.photoUrl || "",
-    proof,
+    proof: compactProofForStorage(proof),
     savedAt: new Date().toISOString(),
     uploadSource,
   };

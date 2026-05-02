@@ -57,7 +57,7 @@ const marketplaceRn = [
   readFileSync("apps/marketplace-demo/src/localListingStore.ts", "utf8"),
 ].join("\n");
 assert.match(marketplaceRn, /ArgusCamera/);
-assert.match(marketplaceRn, /ArgusBadge/);
+assert.match(marketplaceRn, /ProofBadge/);
 assert.match(marketplaceRn, /react-native-svg/);
 assert.match(marketplaceRn, /EbayWordmark/);
 assert.match(marketplaceRn, /marginLeft: "auto"/);
@@ -67,7 +67,7 @@ assert.match(marketplaceRn, /or Best Offer/);
 assert.match(marketplaceRn, /Capture proof pending/);
 assert.doesNotMatch(marketplaceRn, /Verified Capture pending/);
 assert.match(marketplaceRn, /Devnet integration/);
-assert.match(marketplaceRn, /isArgusProductionProof\(draft\.proof\)[\s\S]*return "Argus verified"/);
+assert.match(marketplaceRn, /isVerifiedProof\(draft\.proof\)[\s\S]*return "Argus verified"/);
 assert.match(marketplaceRn, /Argus demo preview/);
 assert.match(marketplaceRn, /Local preview/);
 assert.match(marketplaceRn, /Simulator preview/);

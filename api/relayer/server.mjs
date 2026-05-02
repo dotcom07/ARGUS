@@ -10,6 +10,7 @@ loadEnv();
 const DEFAULT_PORT = 8787;
 const MAX_REQUEST_BODY_BYTES = 32 * 1024 * 1024;
 const PROOF_ROUTE_PREFIX = "/api/proofs/";
+const PROOF_PHOTO_ROUTE_SUFFIX = "/photo";
 const REGISTRATION_PROGRESS_ROUTE_PREFIX = "/api/registrations/";
 
 const server = http.createServer(async (request, response) => {
@@ -132,6 +133,32 @@ async function routeRequest(request, response) {
       ),
     );
     sendJson(response, 200, loadRegistrationProgress(proofId));
+    return;
+  }
+
+  if (
+    request.method === "GET" &&
+    url.pathname.startsWith(PROOF_ROUTE_PREFIX) &&
+    url.pathname.endsWith(PROOF_PHOTO_ROUTE_SUFFIX)
+  ) {
+    const proofId = decodeURIComponent(
+      url.pathname.slice(
+        PROOF_ROUTE_PREFIX.length,
+        -PROOF_PHOTO_ROUTE_SUFFIX.length,
+      ),
+    );
+    const storedBundle = await loadProofBundle(proofId);
+    if (!storedBundle?.proof?.photoBytesBase64) {
+      sendJson(response, 404, {
+        error: "Proof photo was not found.",
+      });
+      return;
+    }
+
+    response.statusCode = 200;
+    response.setHeader("content-type", "image/jpeg");
+    response.setHeader("cache-control", "private, max-age=60");
+    response.end(Buffer.from(storedBundle.proof.photoBytesBase64, "base64"));
     return;
   }
 

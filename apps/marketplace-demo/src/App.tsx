@@ -17,15 +17,9 @@ import {
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import {
-  ArgusBadge,
   ArgusCamera,
   ARGUS_LOCAL_DEMO_RELAYER,
   configure,
-  getArgusEvidenceLevel,
-  getArgusEvidenceLevelLabel,
-  hasArgusPublicKeyCertificateEvidence,
-  isArgusLocalDemoProof,
-  isArgusProductionProof,
   registerProofWithRelayer,
   type ArgusProof,
 } from "../../../packages/argus-rn-sdk/src";
@@ -164,15 +158,18 @@ export default function MarketplaceDemoApp() {
   const isSimulatorFallback = Boolean(
     activeDraft?.uploadSource === "local_upload" && activeDraft.backendStatus === "local_only",
   );
-  const isProductionProof = isArgusProductionProof(proof);
-  const isLocalOnlyProof = isArgusLocalDemoProof(proof);
+  const isProductionProof = isVerifiedProof(proof);
+  const isLocalOnlyProof = isLocalPreviewProof(proof);
   const isSimulatorPreview = isMarketplaceSimulatorPreviewProof(proof, isSimulatorFallback);
   const hasVerifiedOrPreviewProof = isProductionProof || isLocalOnlyProof || isSimulatorPreview;
   const activeListing = activeDraft?.listing ?? buildListingFromForm(listingForm, "preview-listing");
   const activeProgress = proof?.proofId ? (registrationProgressByProofId[proof.proofId] ?? []) : [];
   const canCreateListing = Boolean(listingForm.title.trim() && listingForm.price.trim());
-  const hasRegisteringDraft = drafts.some(
-    (draft) => draft.backendStatus === "registering" || registeringDraftId === draft.listing.id,
+  const hasAnimatedPendingState = drafts.some(
+    (draft) =>
+      draft.backendStatus === "registering" ||
+      registeringDraftId === draft.listing.id ||
+      (draft.backendStatus === "pending" && !draft.proof.solanaTx),
   );
   const pendingDots = ".".repeat(pendingDotCount);
 
@@ -216,7 +213,7 @@ export default function MarketplaceDemoApp() {
   }, [drafts, registeringDraftId]);
 
   useEffect(() => {
-    if (!hasRegisteringDraft) {
+    if (!hasAnimatedPendingState) {
       return undefined;
     }
 
@@ -225,7 +222,7 @@ export default function MarketplaceDemoApp() {
     }, PENDING_DOT_MS);
 
     return () => clearInterval(intervalId);
-  }, [hasRegisteringDraft]);
+  }, [hasAnimatedPendingState]);
 
   useEffect(() => {
     drafts.forEach((draft) => {
@@ -328,7 +325,7 @@ export default function MarketplaceDemoApp() {
     setRegisteringDraftId(null);
     void refreshRegistrationProgress(createdProof.proofId);
     if (createdProof.proofRecord) {
-      const isRegistered = isArgusProductionProof(createdProof);
+      const isRegistered = isVerifiedProof(createdProof);
       persistDraft(createdProof, {
         backendMessage: isRegistered
           ? "Solana devnet registered"
@@ -548,7 +545,7 @@ export default function MarketplaceDemoApp() {
                   <View style={styles.photoStage}>
                     <ListingPhoto draft={activeDraft} imageStyle={styles.itemPhoto} />
                     <View style={styles.photoBadge}>
-                      <ArgusBadge proof={proof} />
+                      <ProofBadge proof={proof} />
                     </View>
                   </View>
 
@@ -603,13 +600,11 @@ export default function MarketplaceDemoApp() {
                     />
                     <EvidenceLine
                       label="Level 3 key"
-                      isReady={Boolean(isProductionProof && hasArgusPublicKeyCertificateEvidence(proof))}
+                      isReady={Boolean(isProductionProof && proof?.deviceEvidenceSummary?.level3KeystoreSignature)}
                     />
                     <EvidenceLine
                       label="Level 4 attestation"
-                      isReady={Boolean(
-                        isProductionProof && getArgusEvidenceLevel(proof) === "level_4_hardware_attestation",
-                      )}
+                      isReady={Boolean(isProductionProof && hasTrustedLevel4Attestation(proof))}
                     />
                     <EvidenceLine
                       label="Authorized relayer"
@@ -806,7 +801,7 @@ function SellingDraftCard({
   pendingDots: string;
 }) {
   const proof = draft.proof;
-  const level = getArgusEvidenceLevelLabel(proof) ?? proof.proofRecord?.proofLevel ?? proof.proofLevel ?? "Pending";
+  const level = getDisplayEvidenceLevelLabel(proof);
 
   return (
     <Pressable
@@ -819,13 +814,13 @@ function SellingDraftCard({
         <Text style={styles.listingTitle}>{draft.listing.title}</Text>
         <Text style={styles.listingPrice}>{draft.listing.price}</Text>
         <View style={styles.badgeRow}>
-          <Text style={isArgusProductionProof(proof) ? styles.verifiedPill : styles.pendingPill}>
+          <Text style={isVerifiedProof(proof) ? styles.verifiedPill : styles.pendingPill}>
             {getListingStatus(draft, isRegistering, pendingDots)}
           </Text>
           <Text style={styles.pendingPill}>{level}</Text>
         </View>
         <Text style={styles.proofTiny}>
-          {proof.solanaTx ? `Solana ${shortenHash(proof.solanaTx)}` : "Solana pending"}
+          {proof.solanaTx ? `Solana ${shortenHash(proof.solanaTx)}` : `Solana record pending${pendingDots}`}
         </Text>
       </View>
     </Pressable>
@@ -843,25 +838,20 @@ function ArgusHomeListing({
 }) {
   const proof = draft.proof;
   const solanaUrl = getSolanaExplorerUrl(proof);
-  const level = getArgusEvidenceLevelLabel(proof) ?? proof.proofRecord?.proofLevel ?? proof.proofLevel;
   const statusLabel = getListingStatus(draft, isRegistering, pendingDots);
+  const recordAddress = proof.proofRecord?.address;
 
   return (
     <View style={styles.argusHomeCard}>
-      <ListingPhoto draft={draft} imageStyle={styles.homeListingImage} />
       <View style={styles.homeListingBody}>
         <View style={styles.snapshotHeader}>
-          <ArgusBadge proof={proof} />
-          <Text style={isArgusProductionProof(proof) ? styles.verifiedPill : styles.pendingPill}>{statusLabel}</Text>
+          <Text style={isVerifiedProof(proof) ? styles.verifiedPill : styles.pendingPill}>{statusLabel}</Text>
         </View>
         <Text style={styles.homeListingTitle}>{draft.listing.title}</Text>
         <Text style={styles.homePrice}>{draft.listing.price}</Text>
-        <View style={styles.homeProofGrid}>
-          <ProofDetail label="Level" value={level ?? "Pending"} />
-          <ProofDetail label="Registry" value={proof.proofRecord?.status ?? "pending"} />
-          <ProofDetail label="Solana" value={proof.solanaTx ? shortenHash(proof.solanaTx) : "Pending"} />
-          <ProofDetail label="Backend" value={statusCopy(draft.backendStatus, isRegistering, pendingDots)} />
-        </View>
+        <Text style={styles.homeMeta}>
+          {recordAddress ? `Contract ${shortenHash(recordAddress)}` : `Contract pending${pendingDots}`}
+        </Text>
         <Pressable
           accessibilityRole="link"
           disabled={!solanaUrl}
@@ -873,7 +863,7 @@ function ArgusHomeListing({
           style={solanaUrl ? styles.solanaAction : styles.solanaActionDisabled}
         >
           <Text style={solanaUrl ? styles.solanaActionText : styles.solanaActionTextDisabled}>
-            {solanaUrl ? "Open Solana scan" : "Solana record pending"}
+            {solanaUrl ? "Open Solana scan" : `Solana record pending${pendingDots}`}
           </Text>
         </Pressable>
       </View>
@@ -945,11 +935,11 @@ export function VerificationSnapshot({
   isSimulatorPreview?: boolean;
 }) {
   const solanaTx = proof?.solanaTx;
-  const isProductionProof = isArgusProductionProof(proof);
-  const isLocalDemoProof = isArgusLocalDemoProof(proof);
+  const isProductionProof = isVerifiedProof(proof);
+  const isLocalDemoProof = isLocalPreviewProof(proof);
   const isTrustedSimulatorPreview = isMarketplaceSimulatorPreviewProof(proof, isSimulatorPreview);
   const displayedProofLevel = proof?.proofRecord?.proofLevel ?? proof?.proofLevel;
-  const displayedEvidenceLevel = getArgusEvidenceLevelLabel(proof) ?? displayedProofLevel;
+  const displayedEvidenceLevel = getDisplayEvidenceLevelLabel(proof) ?? displayedProofLevel;
   const statusLabel = proof
     ? isProductionProof
       ? "Verified"
@@ -965,7 +955,7 @@ export function VerificationSnapshot({
   return (
     <View style={styles.snapshotPanel}>
       <View style={styles.snapshotHeader}>
-        <ArgusBadge proof={proof} />
+        <ProofBadge proof={proof} />
         <Text style={styles.snapshotStatus}>{statusLabel}</Text>
       </View>
       <View style={styles.metricGrid}>
@@ -986,9 +976,29 @@ export function VerificationSnapshot({
         style={solanaUrl ? styles.solanaAction : styles.solanaActionDisabled}
       >
         <Text style={solanaUrl ? styles.solanaActionText : styles.solanaActionTextDisabled}>
-          {solanaUrl ? "Open Solana Explorer" : "Solana record pending"}
+          {solanaUrl ? "Open Solana Explorer" : `Solana record pending${pendingDots}`}
         </Text>
       </Pressable>
+    </View>
+  );
+}
+
+function ProofBadge({ proof }: { proof: ArgusProof | null }) {
+  const isVerified = isVerifiedProof(proof);
+  const isDemo = isLocalPreviewProof(proof);
+  const hasProof = Boolean(proof);
+  const label = isVerified
+    ? "Verified Capture"
+    : isDemo
+      ? "Demo Preview"
+      : hasProof
+        ? "Capture Not Verified"
+        : "Capture Pending";
+  const badgeStyle = isVerified ? styles.proofBadgeVerified : isDemo ? styles.proofBadgeDemo : styles.proofBadgePending;
+
+  return (
+    <View style={badgeStyle}>
+      <Text style={styles.proofBadgeText}>{label}</Text>
     </View>
   );
 }
@@ -1002,12 +1012,98 @@ export function ProofDetail({ label, value }: { label: string; value: string }) 
   );
 }
 
+function isVerifiedProof(proof?: ArgusProof | null): boolean {
+  return Boolean(
+    proof?.proofRecord?.status === "active" &&
+      proof.proofRecord.relayerAuthorized === true &&
+      proof.proofRecord.proofId === proof.proofId &&
+      proof.proofRecord.manifestHash === proof.manifestHash &&
+      proof.proofRecord.imageHash === proof.imageHash &&
+      proof.proofRecord.partnerIdHash === proof.partnerIdHash &&
+      proof.proofRecord.relayer === proof.relayer &&
+      proof.proofRecord.registryProgramId === proof.registryProgramId &&
+      proof.registryAddress === proof.registryProgramId &&
+      proof.feePayer === proof.relayer &&
+      proof.sponsoredGas === true &&
+      proof.solanaTx,
+  );
+}
+
+function isLocalPreviewProof(proof?: ArgusProof | null): boolean {
+  return Boolean(
+    proof &&
+      proof.proofLevel === "demo" &&
+      proof.relayer === ARGUS_LOCAL_DEMO_RELAYER &&
+      proof.feePayer === ARGUS_LOCAL_DEMO_RELAYER &&
+      proof.sponsoredGas === false &&
+      proof.registryAddress === proof.registryProgramId &&
+      proof.proofRecord?.proofLevel === "demo" &&
+      proof.proofRecord?.status === "superseded" &&
+      proof.proofRecord?.relayer === ARGUS_LOCAL_DEMO_RELAYER &&
+      proof.proofRecord?.relayerAuthorized === false &&
+      proof.proofRecord?.registryProgramId === proof.registryProgramId,
+  );
+}
+
+function getDisplayEvidenceLevelLabel(proof?: ArgusProof | null): string | undefined {
+  if (proof?.proofLevel === "demo") {
+    return "Level 1 - Demo preview";
+  }
+
+  const evidenceLevel = proof?.deviceEvidenceSummary?.evidenceLevel;
+  if (
+    (evidenceLevel === "level_3_keystore_signature" ||
+      (evidenceLevel === "level_4_hardware_attestation" && !hasTrustedLevel4Attestation(proof))) &&
+    (proof?.deviceEvidenceSummary?.attestationStatus ===
+      "level_4_material_present_pending_relayer_root_validation" ||
+      proof?.deviceEvidenceSummary?.keystoreAttestationMaterial === true ||
+      proof?.deviceEvidenceSummary?.level4HardwareAttestation === true)
+  ) {
+    return "Level 3 - hardware attestation material pending relayer validation";
+  }
+
+  if (evidenceLevel) {
+    return formatEvidenceLevelLabel(evidenceLevel);
+  }
+
+  if (proof?.proofRecord?.proofLevel === "app_capture" || proof?.proofLevel === "app_capture") {
+    return "App capture";
+  }
+
+  return undefined;
+}
+
+function hasTrustedLevel4Attestation(proof?: ArgusProof | null): boolean {
+  const summary = proof?.deviceEvidenceSummary;
+  return Boolean(
+    summary?.level4HardwareAttestation === true &&
+      summary.trustedAttestationRootConfigured === true &&
+      summary.trustedAttestationRootValidated === true &&
+      hasText(summary.trustedAttestationRootFingerprintSha256),
+  );
+}
+
+function formatEvidenceLevelLabel(evidenceLevel: string): string {
+  switch (evidenceLevel) {
+    case "level_1_demo":
+      return "Level 1 - Demo preview";
+    case "level_2_native_capture":
+      return "Level 2 - Native capture evidence";
+    case "level_3_keystore_signature":
+      return "Level 3 - Keystore-signed capture";
+    case "level_4_hardware_attestation":
+      return "Level 4 - Trusted device attestation";
+    default:
+      return evidenceLevel;
+  }
+}
+
 function isMarketplaceSimulatorPreviewProof(proof: ArgusProof | null, isSimulatorPreview: boolean): boolean {
   return Boolean(
     isSimulatorPreview &&
       proof &&
-      !isArgusProductionProof(proof) &&
-      !isArgusLocalDemoProof(proof) &&
+      !isVerifiedProof(proof) &&
+      !isLocalPreviewProof(proof) &&
       proof.proofLevel === "demo" &&
       proof.relayer === ARGUS_LOCAL_DEMO_RELAYER &&
       proof.feePayer === ARGUS_LOCAL_DEMO_RELAYER &&
@@ -1064,7 +1160,15 @@ function getDraftPhotoUri(draft: LocalListingDraft | null): string {
     return "";
   }
 
-  return draft.photoUri || photoDataUri(draft.proof.photoBytesBase64);
+  if (draft.photoUri) {
+    return draft.photoUri;
+  }
+
+  if (draft.backendStatus === "registered" || isVerifiedProof(draft.proof)) {
+    return buildStoredProofPhotoUrl(draft.proof.proofId) || "";
+  }
+
+  return "";
 }
 
 function getListingStatus(draft: LocalListingDraft, isRegistering: boolean, pendingDots = ""): string {
@@ -1072,7 +1176,7 @@ function getListingStatus(draft: LocalListingDraft, isRegistering: boolean, pend
     return `Registering${pendingDots}`;
   }
 
-  if (isArgusProductionProof(draft.proof)) {
+  if (isVerifiedProof(draft.proof)) {
     return "Argus verified";
   }
 
@@ -1081,7 +1185,7 @@ function getListingStatus(draft: LocalListingDraft, isRegistering: boolean, pend
   }
 
   if (
-    isArgusLocalDemoProof(draft.proof) ||
+    isLocalPreviewProof(draft.proof) ||
     isMarketplaceSimulatorPreviewProof(draft.proof, draft.uploadSource === "local_upload")
   ) {
     return "Argus demo preview";
@@ -1206,6 +1310,15 @@ function buildStoredProofUrl(proofId: string): string | null {
   }
 }
 
+function buildStoredProofPhotoUrl(proofId: string): string | null {
+  try {
+    const baseUrl = ARGUS_DEMO_BACKEND_URL.replace(/\/+$/, "");
+    return `${baseUrl}/api/proofs/${encodeURIComponent(proofId)}/photo`;
+  } catch {
+    return null;
+  }
+}
+
 function formatProgressTime(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -1227,7 +1340,7 @@ function shouldHydrateStoredProof(draft: LocalListingDraft): boolean {
   return (
     draft.backendStatus !== "pending" &&
     hasText(draft.proof.proofId) &&
-    (!hasText(draft.proof.photoBytesBase64) || !hasText(draft.proof.canonicalManifestJson))
+    (!hasText(draft.proof.solanaTx) || !hasText(draft.proof.proofRecord?.address))
   );
 }
 
@@ -1236,14 +1349,41 @@ function mergeHydratedProof(drafts: LocalListingDraft[], storedProof: ArgusProof
     draft.proof.proofId === storedProof.proofId
       ? {
           ...draft,
-          proof: {
+          photoUri: draft.photoUri || buildStoredProofPhotoUrl(storedProof.proofId) || "",
+          proof: compactProofForUi({
             ...storedProof,
             proofRecord: storedProof.proofRecord ?? draft.proof.proofRecord,
             solanaTx: storedProof.solanaTx ?? draft.proof.solanaTx,
-          },
+          }),
         }
       : draft,
   );
+}
+
+function compactProofForUi(proof: ArgusProof): ArgusProof {
+  return {
+    appIdentityHash: proof.appIdentityHash,
+    capturedAt: proof.capturedAt,
+    captureSessionId: proof.captureSessionId,
+    deviceEvidenceSummary: proof.deviceEvidenceSummary,
+    feePayer: proof.feePayer,
+    imageHash: proof.imageHash,
+    integrityLevel: proof.integrityLevel,
+    manifestHash: proof.manifestHash,
+    nonce: proof.nonce,
+    partnerId: proof.partnerId,
+    partnerIdHash: proof.partnerIdHash,
+    proofId: proof.proofId,
+    proofLevel: proof.proofLevel,
+    proofRecord: proof.proofRecord,
+    registryAddress: proof.registryAddress,
+    registryProgramId: proof.registryProgramId,
+    relayer: proof.relayer,
+    solanaTx: proof.solanaTx,
+    sponsoredGas: proof.sponsoredGas,
+    useCase: proof.useCase,
+    verificationUrl: proof.verificationUrl,
+  };
 }
 
 function upsertLocalDraftState(drafts: LocalListingDraft[], draft: LocalListingDraft): LocalListingDraft[] {
@@ -1255,10 +1395,6 @@ function upsertLocalDraftState(drafts: LocalListingDraft[], draft: LocalListingD
   const nextDrafts = [...drafts];
   nextDrafts[existingIndex] = draft;
   return nextDrafts;
-}
-
-function photoDataUri(photoBytesBase64?: string): string {
-  return photoBytesBase64 ? `data:image/jpeg;base64,${photoBytesBase64}` : "";
 }
 
 function formatListingPrice(value: string): string {
@@ -1429,11 +1565,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     paddingHorizontal: 8,
     paddingVertical: 5,
-  },
-  homeProofGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
   },
   sellingHero: {
     backgroundColor: "#f5f9ff",
@@ -1656,6 +1787,29 @@ const styles = StyleSheet.create({
     color: "#111827",
     fontSize: 15,
     fontWeight: "800",
+  },
+  proofBadgeVerified: {
+    backgroundColor: "#0f7b5f",
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  proofBadgeDemo: {
+    backgroundColor: "#7c5c2e",
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  proofBadgePending: {
+    backgroundColor: "#6b7280",
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  proofBadgeText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "700",
   },
   metricGrid: {
     flexDirection: "row",

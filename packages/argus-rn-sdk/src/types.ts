@@ -26,6 +26,7 @@ export type ArgusDeviceEvidenceSummary = {
 };
 
 export type ArgusProofRecord = {
+  address?: string;
   proofId: string;
   manifestHash: string;
   imageHash: string;
