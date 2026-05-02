@@ -30,6 +30,40 @@ relayer session and nonce policy
 Argus Registry proof record
 ```
 
+## Why Solana
+
+Argus uses a Solana program because a platform database flag is not enough once a photo leaves one app. The Argus Registry gives each accepted proof a public, tamper-evident commitment that anyone can inspect later.
+
+The registry is not a generic hash board. It accepts `register_proof` only from the configured Argus-authorized relayer and stores a structured proof record:
+
+```text
+proofId
+manifestHash
+imageHash
+partnerIdHash
+captureTimestamp
+proofLevel
+relayer
+status
+```
+
+That means a verifier is not asking, "does this image hash exist somewhere onchain?" It is asking whether the photo, manifest, evidence commitments, relayer policy, and Argus Registry record all match.
+
+## Android/Kotlin Evidence
+
+The Android native layer is where Argus gets the embedded-device signal. The Kotlin module opens a CameraX capture flow directly; it is not a gallery upload path hidden behind React Native.
+
+The SDK binds the submitted photo to:
+
+- SDK-owned capture file path, file identity, timestamp, byte length, and byte hash
+- CameraX capture timing and no-gallery-import evidence
+- package name and app signing certificate digest
+- relayer-issued capture session ID and nonce
+- accelerometer and gyroscope motion snapshot near capture time
+- optional Android Keystore signature and key-attestation material
+
+This still is not a camera-sensor signature. The claim is narrower and practical: the submitted bytes came through the Argus-controlled Android capture path and match the committed device evidence.
+
 ## Repository Contents
 
 | Path | Purpose |
@@ -78,6 +112,23 @@ Argus production status requires all of these to match:
 - authorized relayer signer and fee-payer binding
 
 Solana stores compact commitments only. Photos and raw evidence stay offchain. The chain does not inspect Android internals; it anchors the commitments accepted by the relayer so later bundle rewrites can be detected.
+
+## Verifier Demo Flow
+
+The demo verifier can use a simple backend-assisted flow:
+
+```text
+verifier frontend -> Argus backend -> stored proof bundle + Solana devnet lookup
+```
+
+In this flow, the backend returns the stored proof bundle, recomputed match flags, the Solana transaction signature, and the proof-record account address. The frontend displays the result and links to public Solana inspection pages:
+
+```text
+https://explorer.solana.com/tx/{signature}?cluster=devnet
+https://explorer.solana.com/address/{proofRecordPda}?cluster=devnet
+```
+
+This is not a fully trustless client-side verifier. The demo backend is the retrieval and recomputation layer; the trust-critical commitment remains the Argus Registry record on Solana.
 
 ## Evidence Levels
 
@@ -132,16 +183,6 @@ The preview serves:
 http://127.0.0.1:4173/apps/marketplace-demo/
 http://127.0.0.1:4173/apps/verifier-web/
 ```
-
-## Modes
-
-| Mode | Notes |
-| --- | --- |
-| `demo` | Validates local/demo bundle shape and returns non-production records |
-| `solana` | Attempts Solana registration through the relayer submitter path |
-| production | Requires real Android capture evidence, durable storage, partner auth, authorized relayer, pinned registry configuration, and verifier API |
-
-Default relayer mode is `demo`.
 
 ## Important Limits
 

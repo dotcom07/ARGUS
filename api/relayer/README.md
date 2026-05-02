@@ -20,6 +20,25 @@ For devnet/localnet submission, set `ARGUS_RELAYER_MODE=solana` and use `.env` v
 
 The production `GET /proof-bundle/:proofId` equivalent should return stored canonical manifest, metadata, camera evidence, device integrity evidence, photo object reference or bytes, registry program ID, proof record address, Solana transaction, relayer, fee payer, sponsoredGas, status, and creation time. It must fail closed for missing, duplicated, malformed, revoked, or non-active bundle records and must not describe storage as trusted by itself; the verifier still recomputes all commitments against the registry record, sponsored gas/fee-payer binding, and authorized relayer trust root.
 
+For the demo/simple verifier mode, the backend can do the recomputation and Solana devnet lookup before returning a verifier result. This keeps the demo frontend thin while still exposing the public onchain commitment for inspection. The backend response should include:
+
+```text
+- proof bundle fields needed for display and recomputation
+- recomputed match flags for photo bytes, manifest, evidence commitments, proof ID, proof record, registry program, and relayer/fee-payer policy
+- Solana transaction signature
+- proof record PDA/address
+- Solana Explorer links for the transaction and proof record
+```
+
+The frontend may then display the backend result plus public links such as:
+
+```text
+https://explorer.solana.com/tx/{signature}?cluster=devnet
+https://explorer.solana.com/address/{proofRecordPda}?cluster=devnet
+```
+
+Do not describe this demo mode as fully trustless client-side verification. In this mode, the backend is the retrieval and recomputation layer. The product claim is that the accepted commitment is publicly inspectable on Solana and that the returned bundle is checked against it. A later stronger verifier can move Solana RPC reads and bundle recomputation into the client while keeping the backend as a bundle retrieval layer.
+
 Android evidence levels are carried inside the committed `deviceIntegrityJson` while the registry `proofLevel` remains `app_capture`. Level 2 is the native camera + app identity + motion baseline. Level 3 requires a Keystore signature over the proof manifest or binding message, currently binding the relayer session, manifest fields, image/evidence commitments, capture timestamp, and unsigned device evidence hash; the verifier path must validate the signature and signer public key. Level 4 requires the Level 3 signature plus Android Key Attestation certificate-chain validation: the leaf public key must match the Keystore signature key, the Android attestation extension challenge must match the session nonce, the attestation/keymaster security levels must be TEE or StrongBox, and the root certificate SHA-256 fingerprint must match `ARGUS_ANDROID_ATTESTATION_ROOT_SHA256`. Without that configured and validated trust root, Level 4 fails closed and the app/device should fall back to Level 3 or Level 2. Devices that cannot provide hardware attestation must explicitly fall back to Level 3 or Level 2; the relayer rejects Level 4 claims that use fallback material.
 
 `registerProof.mjs` only returns verifier links for allowlisted verifier bases. The default production verifier is `https://verify.argus.dev`; set `ARGUS_VERIFIER_BASE_URL_ALLOWLIST` to a JSON array of trusted base URLs when deploying a branded verifier. Base paths are supported only when the exact normalized base path is allowlisted, and duplicate normalized verifier bases fail closed as config errors before consuming sessions. Raw URL paths are checked before parser/proxy normalization: raw slash/backslash traversal is rejected, and encoded separators are accepted only for exact allowlisted base paths and are rejected when they decode into `.` or `..` traversal. Loopback verifier bases, including `http` and `https` localhost, 127/8 IPv4 forms, IPv4-mapped 127/8 IPv6 forms, and `[::1]`, are rejected when `NODE_ENV=production`; production also fails closed if the verifier allowlist itself contains one of those loopback roots. Loopback verifier bases are accepted only for local development. The current RN SDK production client trusts the default production origin and loopback development bases; branded verifier support needs a matching client-side trust update, not only a relayer allowlist entry.
