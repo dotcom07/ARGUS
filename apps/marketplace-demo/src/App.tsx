@@ -35,7 +35,6 @@ import {
   ARGUS_DEMO_USE_CASE,
 } from "../../shared/argusDemoConfig";
 import { listing, type MarketplaceListing } from "./data/listing";
-import { createMarketplaceSimulatorProof } from "./demoProof";
 import { FigmaIcon, type FigmaIconName } from "./FigmaIcon";
 import {
   buildListingDraft,
@@ -133,6 +132,7 @@ export default function MarketplaceDemoApp() {
   const [activeTab, setActiveTab] = useState<TabId>("home");
   const [draftListingId, setDraftListingId] = useState(() => createListingId());
   const [listingForm, setListingForm] = useState<ListingForm>(emptyListingForm);
+  const [captureError, setCaptureError] = useState<string | null>(null);
   const [registeringDraftId, setRegisteringDraftId] = useState<string | null>(null);
 
   const activeDraft = drafts.find((item) => item.listing.id === activeDraftId) ?? drafts[0] ?? null;
@@ -158,36 +158,18 @@ export default function MarketplaceDemoApp() {
   }, []);
 
   function handleNativeError(error: Error) {
-    const listingForProof = createListingFromCurrentForm();
-    const simulatorProof = createMarketplaceSimulatorProof(listingForProof);
-    persistDraft(simulatorProof, {
-      backendMessage: `SDK capture failed: ${error.message}`,
-      backendStatus: "local_only",
-      listing: listingForProof,
-      uploadSource: "local_upload",
-    });
-    resetListingForm();
+    setCaptureError(`SDK camera failed: ${error.message}`);
   }
 
   function handleProofCreated(createdProof: ArgusProof) {
     const listingForProof = createListingFromCurrentForm();
+    setCaptureError(null);
     resetListingForm();
     void persistAndRegisterProof(createdProof, listingForProof);
   }
 
-  function handleUploadLocalPhoto() {
-    const listingForProof = createListingFromCurrentForm();
-    const simulatorProof = createMarketplaceSimulatorProof(listingForProof);
-    persistDraft(simulatorProof, {
-      backendMessage: "Local preview saved",
-      backendStatus: "local_only",
-      listing: listingForProof,
-      uploadSource: "local_upload",
-    });
-    resetListingForm();
-  }
-
   async function persistAndRegisterProof(createdProof: ArgusProof, listingForProof: MarketplaceListing) {
+    setCaptureError(null);
     persistDraft(createdProof, {
       backendMessage: "Registering proof",
       backendStatus: "registering",
@@ -356,17 +338,7 @@ export default function MarketplaceDemoApp() {
                     <Text style={styles.disabledActionText}>Enter title and price first</Text>
                   </View>
                 )}
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={!canCreateListing}
-                  onPress={handleUploadLocalPhoto}
-                  style={canCreateListing ? styles.uploadAction : styles.uploadActionDisabled}
-                >
-                  <FigmaIcon color={canCreateListing ? "#ffffff" : "#596273"} name="upload" size={18} />
-                  <Text style={canCreateListing ? styles.uploadActionText : styles.uploadActionTextDisabled}>
-                    Upload local demo photo
-                  </Text>
-                </Pressable>
+                {captureError ? <Text style={styles.fallbackNote}>{captureError}</Text> : null}
               </View>
 
               {activeDraft ? (
@@ -638,7 +610,9 @@ function SellingDraftCard({
         <Text style={styles.listingTitle}>{draft.listing.title}</Text>
         <Text style={styles.listingPrice}>{draft.listing.price}</Text>
         <View style={styles.badgeRow}>
-          <Text style={styles.verifiedPill}>{getListingStatus(draft, isRegistering)}</Text>
+          <Text style={isArgusProductionProof(proof) ? styles.verifiedPill : styles.pendingPill}>
+            {getListingStatus(draft, isRegistering)}
+          </Text>
           <Text style={styles.pendingPill}>{level}</Text>
         </View>
         <Text style={styles.proofTiny}>
@@ -667,7 +641,7 @@ function ArgusHomeListing({
       <View style={styles.homeListingBody}>
         <View style={styles.snapshotHeader}>
           <ArgusBadge proof={proof} />
-          <Text style={styles.verifiedPill}>{statusLabel}</Text>
+          <Text style={isArgusProductionProof(proof) ? styles.verifiedPill : styles.pendingPill}>{statusLabel}</Text>
         </View>
         <Text style={styles.homeListingTitle}>{draft.listing.title}</Text>
         <Text style={styles.homePrice}>{draft.listing.price}</Text>
@@ -901,12 +875,12 @@ function getListingStatus(draft: LocalListingDraft, isRegistering: boolean): str
     return "Registering";
   }
 
-  if (
-    draft.backendStatus === "registered" ||
-    isArgusProductionProof(draft.proof) ||
-    draft.proof.proofRecord?.status === "active"
-  ) {
+  if (isArgusProductionProof(draft.proof)) {
     return "Argus verified";
+  }
+
+  if (draft.backendStatus === "registered" || draft.proof.proofRecord?.status === "active") {
+    return "Devnet integration";
   }
 
   if (
