@@ -2,9 +2,7 @@
 
 ![Argus banner](./images/Argus_banner.png)
 
-Argus is a React Native SDK and Solana registry prototype for verifying that a submitted photo came through an Argus-controlled in-app capture flow.
-
-It is not an AI-image detector and it does not prove that a physical scene is true. Argus verifies a narrower claim: the submitted photo bytes match a capture manifest, Android-side evidence, relayer policy, and an authorized registry commitment.
+Argus is a React Native SDK and Solana registry prototype that turns in-app photo capture into a verifiable receipt. Instead of trusting a raw upload after the fact, a partner app can require an Argus capture path, bind the exact photo bytes to Android-side evidence and relayer policy, and anchor the accepted commitment in an authorized Solana registry record.
 
 ## How It Works
 
