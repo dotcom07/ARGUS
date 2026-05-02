@@ -56,8 +56,11 @@ export function getArgusEvidenceLevel(proof?: ArgusProof | null): ArgusEvidenceL
   const hasLevel4Evidence = Boolean(
     hasNativeEvidence && deviceIntegrity && level4HardwareAttestationEvidenceMatches(deviceIntegrity),
   );
+  const hasRelayerAcceptedLevel4Evidence = Boolean(
+    hasNativeEvidence && relayerAcceptedLevel4EvidenceMatches(summary),
+  );
 
-  if (hasLevel4Evidence) {
+  if (hasLevel4Evidence || hasRelayerAcceptedLevel4Evidence) {
     return "level_4_hardware_attestation";
   }
 
@@ -944,6 +947,18 @@ function trustedAttestationRootPolicyMatches(deviceIntegrity: Record<string, unk
     deviceIntegrity.trustedAttestationRootConfigured === true &&
     deviceIntegrity.trustedAttestationRootValidated === true &&
     isNonZeroHex32(deviceIntegrity.trustedAttestationRootFingerprintSha256 as string | undefined)
+  );
+}
+
+function relayerAcceptedLevel4EvidenceMatches(
+  summary: ArgusProof["deviceEvidenceSummary"],
+): boolean {
+  return (
+    summary?.evidenceLevel === "level_4_hardware_attestation" &&
+    summary.level4HardwareAttestation === true &&
+    summary.trustedAttestationRootConfigured === true &&
+    summary.trustedAttestationRootValidated === true &&
+    isNonZeroHex32(summary.trustedAttestationRootFingerprintSha256)
   );
 }
 

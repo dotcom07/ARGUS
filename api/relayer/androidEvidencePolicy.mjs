@@ -8,6 +8,9 @@ const SUPPORTED_KEYSTORE_SIGNATURE_ALGORITHMS = new Set([
 const MAX_SIGNATURE_BYTES = 2048;
 const ANDROID_ATTESTATION_ROOT_SHA256_ENV = "ARGUS_ANDROID_ATTESTATION_ROOT_SHA256";
 const ANDROID_KEY_ATTESTATION_EXTENSION_OID = "1.3.6.1.4.1.11129.2.1.17";
+const ANDROID_LEVEL_4_MATERIAL_PENDING_RELAY_VALIDATION =
+  "level_4_material_present_pending_relayer_root_validation";
+const ANDROID_LEVEL_4_TRUSTED_ROOT_VALIDATED = "level_4_trusted_root_validated";
 const ANDROID_SECURITY_LEVEL_TRUSTED_ENVIRONMENT = 1;
 const ANDROID_SECURITY_LEVEL_STRONGBOX = 2;
 const ANDROID_SECURITY_LEVEL_NAMES = new Map([
@@ -69,13 +72,21 @@ export function validateAndroidEvidenceLevel({ deviceIntegrity, manifest, reques
       attestationSecurityLevel: hardwareAttestation.attestationSecurityLevel,
       keymasterSecurityLevel: hardwareAttestation.keymasterSecurityLevel,
       trustedRootFingerprintSha256: hardwareAttestation.trustedRootFingerprintSha256,
+      level4AttestationVerdict: acceptedLevel4AttestationVerdict(hardwareAttestation),
     };
   }
+
+  const level4AttestationVerdict = validatePendingLevel4AttestationMaterial({
+    deviceIntegrity,
+    keystoreSignature,
+    request,
+  });
 
   return {
     acceptedLevel: 3,
     evidenceLevel: "level_3_keystore_signature",
     fallbackReason: fallback?.reason,
+    level4AttestationVerdict,
   };
 }
 
@@ -177,6 +188,76 @@ function validateHardwareAttestation(hardwareAttestation, keystoreSignature, req
     keystoreSignature.publicKeyPem,
     request.sessionNonce,
   );
+}
+
+function validatePendingLevel4AttestationMaterial({ deviceIntegrity, keystoreSignature, request }) {
+  if (!hasPendingLevel4AttestationMaterial(deviceIntegrity)) {
+    return undefined;
+  }
+
+  try {
+    const hardwareAttestation = validateHardwareAttestation(
+      deviceIntegrity.hardwareAttestation,
+      keystoreSignature,
+      request,
+    );
+    return acceptedLevel4AttestationVerdict(hardwareAttestation);
+  } catch (error) {
+    const trustRootConfig = androidAttestationTrustRootConfigStatus();
+    return {
+      accepted: false,
+      acceptedLevel: 3,
+      attempted: true,
+      attestationStatus: ANDROID_LEVEL_4_MATERIAL_PENDING_RELAY_VALIDATION,
+      evidenceLevel: "level_3_keystore_signature",
+      failureReason: error instanceof Error ? error.message : "Level 4 Android attestation validation failed",
+      trustedAttestationRootConfigured: trustRootConfig.configured,
+      trustedAttestationRootConfiguredError: trustRootConfig.error,
+      trustedAttestationRootValidated: false,
+    };
+  }
+}
+
+function hasPendingLevel4AttestationMaterial(deviceIntegrity) {
+  const hardwareAttestation = deviceIntegrity.hardwareAttestation;
+  return Boolean(
+    deviceIntegrity.level4AttestationMaterial === true ||
+      deviceIntegrity.keystoreAttestationMaterial === true ||
+      deviceIntegrity.attestationStatus === ANDROID_LEVEL_4_MATERIAL_PENDING_RELAY_VALIDATION ||
+      (hardwareAttestation &&
+        typeof hardwareAttestation === "object" &&
+        !Array.isArray(hardwareAttestation) &&
+        hardwareAttestation.supported === true),
+  );
+}
+
+function acceptedLevel4AttestationVerdict(hardwareAttestation) {
+  return {
+    accepted: true,
+    acceptedLevel: 4,
+    attempted: true,
+    attestationSecurityLevel: hardwareAttestation.attestationSecurityLevel,
+    attestationStatus: ANDROID_LEVEL_4_TRUSTED_ROOT_VALIDATED,
+    evidenceLevel: "level_4_hardware_attestation",
+    hardwareSecurityClass: hardwareAttestation.hardwareSecurityClass,
+    keymasterSecurityLevel: hardwareAttestation.keymasterSecurityLevel,
+    trustedAttestationRootConfigured: true,
+    trustedAttestationRootFingerprintSha256: hardwareAttestation.trustedRootFingerprintSha256,
+    trustedAttestationRootValidated: true,
+  };
+}
+
+function androidAttestationTrustRootConfigStatus() {
+  try {
+    return {
+      configured: configuredAndroidAttestationRootFingerprints().size > 0,
+    };
+  } catch (error) {
+    return {
+      configured: false,
+      error: error instanceof Error ? error.message : "Android attestation trust root config is invalid",
+    };
+  }
 }
 
 function validateHardwareAttestationCertificateChain(certificateChainPem, publicKeyPem, expectedChallengeHex) {

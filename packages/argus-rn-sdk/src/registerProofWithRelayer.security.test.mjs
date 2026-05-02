@@ -2997,6 +2997,31 @@ function derivesEvidenceLevelFallbackWithoutOverclaimingAttestation() {
       trustedAttestationRootValidated: true,
     },
   });
+  const relayerAcceptedLevel4Proof = buildProof({
+    deviceIntegrityJson: stableStringify({
+      ...level4DeviceIntegrity,
+      androidEvidenceLevel: 3,
+      attestationStatus: "level_4_material_present_pending_relayer_root_validation",
+      evidenceLevel: "level_3_keystore_signature",
+      level4HardwareAttestation: false,
+    }),
+    deviceEvidenceSummary: {
+      cameraMetadata: true,
+      motionSnapshot: true,
+      appIdentityHash: true,
+      keystoreSignature: true,
+      evidenceLevel: "level_4_hardware_attestation",
+      level3KeystoreSignature: true,
+      level4HardwareAttestation: true,
+      attestationStatus: "level_4_trusted_root_validated",
+      relayerAcceptedAndroidEvidenceLevel: 4,
+      relayerAcceptedEvidenceLevel: "level_4_hardware_attestation",
+      trustedAttestationRootConfigured: true,
+      trustedAttestationRootFingerprintSha256,
+      trustedAttestationRootValidated: true,
+      trustedAttestationRootValidationAttempted: true,
+    },
+  });
 
   assert.equal(getArgusEvidenceLevel(level4ClaimWithoutKeyCert), "level_2_native_capture");
   assert.equal(
@@ -3031,6 +3056,11 @@ function derivesEvidenceLevelFallbackWithoutOverclaimingAttestation() {
   assert.equal(getArgusEvidenceLevel(level4Proof), "level_4_hardware_attestation");
   assert.equal(getArgusEvidenceLevelLabel(level4Proof), "Level 4 - Trusted device attestation");
   assert.equal(hasArgusHardwareAttestationEvidence(level4Proof), true);
+  assert.equal(getArgusEvidenceLevel(relayerAcceptedLevel4Proof), "level_4_hardware_attestation");
+  assert.equal(
+    getArgusEvidenceLevelLabel(relayerAcceptedLevel4Proof),
+    "Level 4 - Trusted device attestation",
+  );
 }
 
 function rendersProductionProofSummaryWithTransactionReference() {

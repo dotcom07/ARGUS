@@ -383,7 +383,16 @@ export default function MarketplaceDemoApp() {
         },
         createdProof,
       );
-      const registeredProof = { ...createdProof, ...registration };
+      const registeredProof: ArgusProof = {
+        ...createdProof,
+        ...registration,
+        deviceEvidenceSummary: createdProof.deviceEvidenceSummary
+          ? {
+              ...createdProof.deviceEvidenceSummary,
+              ...registration.deviceEvidenceSummary,
+            }
+          : createdProof.deviceEvidenceSummary,
+      };
       persistDraft(registeredProof, {
         backendMessage: "Solana devnet registered",
         backendStatus: "registered",
@@ -500,7 +509,7 @@ export default function MarketplaceDemoApp() {
                   <ListingInput
                     label="Price"
                     onChangeText={(price) => setListingForm((current) => ({ ...current, price }))}
-                    placeholder="$"
+                    placeholder="US $"
                     value={listingForm.price}
                   />
                   <ListingInput
@@ -703,7 +712,7 @@ function HomeScreen({
 
       {drafts.length > 0 ? (
         <View style={styles.homeSection}>
-          <Text style={styles.panelTitle}>Your Argus listings</Text>
+          <Text style={styles.panelTitle}>Your listings</Text>
           {drafts.map((draft) => (
             <ArgusHomeListing
               draft={draft}
@@ -843,6 +852,7 @@ function ArgusHomeListing({
 
   return (
     <View style={styles.argusHomeCard}>
+      <ListingPhoto draft={draft} imageStyle={styles.homeListingImage} />
       <View style={styles.homeListingBody}>
         <View style={styles.snapshotHeader}>
           <Text style={isVerifiedProof(proof) ? styles.verifiedPill : styles.pendingPill}>{statusLabel}</Text>
@@ -1400,14 +1410,22 @@ function upsertLocalDraftState(drafts: LocalListingDraft[], draft: LocalListingD
 function formatListingPrice(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) {
-    return "$0.00";
+    return "US $0.00";
   }
 
-  if (/[$€£¥₩]|^(US|AU|CA|NZ|HK|SG)\s*\$/i.test(trimmed)) {
+  if (/^US\s*\$/i.test(trimmed)) {
     return trimmed;
   }
 
-  return `$${trimmed}`;
+  if (/^\$/.test(trimmed)) {
+    return `US ${trimmed}`;
+  }
+
+  if (/^(AU|CA|NZ|HK|SG)\s*\$|[€£¥₩]/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `US $${trimmed}`;
 }
 
 function nowMs(): number {

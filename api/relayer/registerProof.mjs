@@ -31,13 +31,26 @@ export async function registerProof(request) {
   // en: Demo mode consumes the session inside this function because this is the final registration boundary.
   // en: Solana/production keeps cheap config failures retryable, then burns the nonce once full bundle validation fails.
   const consumeSessionDuringValidation = !submitToSolana && !isProductionRuntime();
-  const manifest = validateRegistrationRequest(normalizedRequest, {
+  const { androidEvidenceDecision, manifest } = validateRegistrationRequest(normalizedRequest, {
     consumeSession: consumeSessionDuringValidation,
     consumeSessionOnValidationFailure: submitToSolana,
   });
+  const relayerDeviceEvidenceSummary = buildRelayerDeviceEvidenceSummary(androidEvidenceDecision);
+  if (androidEvidenceDecision.level4AttestationVerdict?.attempted) {
+    console.info("[Argus relayer] Android attestation root verdict", {
+      proofId: shortValue(normalizedRequest.proofId),
+      acceptedLevel: androidEvidenceDecision.level4AttestationVerdict.acceptedLevel,
+      evidenceLevel: androidEvidenceDecision.level4AttestationVerdict.evidenceLevel,
+      trustedAttestationRootValidated:
+        androidEvidenceDecision.level4AttestationVerdict.trustedAttestationRootValidated === true,
+    });
+  }
   console.info("[Argus relayer] proof validation passed", {
     proofId: shortValue(normalizedRequest.proofId),
     proofLevel: normalizedRequest.proofLevel,
+    relayerAcceptedEvidenceLevel: relayerDeviceEvidenceSummary?.evidenceLevel,
+    trustedAttestationRootValidated:
+      relayerDeviceEvidenceSummary?.trustedAttestationRootValidated,
     useCase: normalizedRequest.useCase,
     mode: relayerMode,
     submitToSolana,
@@ -107,6 +120,8 @@ export async function registerProof(request) {
       feePayer: solanaResult.relayer,
       sponsoredGas: true,
       verificationUrl,
+      deviceEvidenceSummary: relayerDeviceEvidenceSummary,
+      level4AttestationVerdict: androidEvidenceDecision.level4AttestationVerdict,
     };
   }
 
@@ -155,6 +170,8 @@ export async function registerProof(request) {
     feePayer: demoRelayer,
     sponsoredGas: false,
     verificationUrl,
+    deviceEvidenceSummary: relayerDeviceEvidenceSummary,
+    level4AttestationVerdict: androidEvidenceDecision.level4AttestationVerdict,
   };
 }
 
@@ -258,8 +275,8 @@ function validateRegistrationRequest(
 
   try {
     const manifest = verifyManifestAndProofId(request);
-    verifyManifestPolicy(request, manifest);
-    return manifest;
+    const androidEvidenceDecision = verifyManifestPolicy(request, manifest);
+    return { androidEvidenceDecision, manifest };
   } catch (error) {
     if (!consumeSession && consumeSessionOnValidationFailure) {
       consumeRegistrationSessionIfPresent(request);
@@ -414,7 +431,7 @@ function verifyManifestPolicy(request, manifest) {
   );
 
   assertEvidenceCommitment("metadataJson", request.metadataJson, manifest.metadata_commitment);
-  enforceProofLevelPolicy(request, manifest);
+  return enforceProofLevelPolicy(request, manifest);
 }
 
 function assertCaptureTimestampNotAfterRelayerClock(capturedAtMs, nowMs = Date.now()) {
@@ -491,7 +508,34 @@ function enforceProofLevelPolicy(request, manifest) {
     manifest.captured_at_ms,
     request.deviceIntegrityJson,
   );
-  validateAndroidEvidenceLevel({ deviceIntegrity, manifest, request });
+  return validateAndroidEvidenceLevel({ deviceIntegrity, manifest, request });
+}
+
+function buildRelayerDeviceEvidenceSummary(androidEvidenceDecision) {
+  const verdict = androidEvidenceDecision?.level4AttestationVerdict;
+  if (!verdict?.attempted) {
+    return undefined;
+  }
+
+  return {
+    attestationSecurityLevel: verdict.attestationSecurityLevel,
+    attestationStatus: verdict.attestationStatus,
+    evidenceLevel: verdict.evidenceLevel,
+    hardwareSecurityClass: verdict.hardwareSecurityClass,
+    keymasterSecurityLevel: verdict.keymasterSecurityLevel,
+    keystoreAttestationMaterial: true,
+    keystoreSignature: true,
+    level3KeystoreSignature: true,
+    level4HardwareAttestation: verdict.accepted === true,
+    relayerAcceptedAndroidEvidenceLevel: verdict.acceptedLevel,
+    relayerAcceptedEvidenceLevel: verdict.evidenceLevel,
+    trustedAttestationRootConfigured: verdict.trustedAttestationRootConfigured === true,
+    trustedAttestationRootConfiguredError: verdict.trustedAttestationRootConfiguredError,
+    trustedAttestationRootFingerprintSha256: verdict.trustedAttestationRootFingerprintSha256,
+    trustedAttestationRootValidated: verdict.trustedAttestationRootValidated === true,
+    trustedAttestationRootValidationAttempted: true,
+    trustedAttestationRootValidationError: verdict.failureReason,
+  };
 }
 
 function validateCapturedFileBytes(cameraEvidence, cameraEvidenceJson, photoBytesBase64, imageHash) {

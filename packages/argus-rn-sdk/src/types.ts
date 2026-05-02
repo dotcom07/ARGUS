@@ -20,9 +20,17 @@ export type ArgusDeviceEvidenceSummary = {
   androidEvidenceLevel?: number;
   keystorePublicKeyPem?: string;
   attestationCertificateChainPem?: string[];
+  relayerAcceptedAndroidEvidenceLevel?: number;
+  relayerAcceptedEvidenceLevel?: ArgusEvidenceLevel;
+  trustedAttestationRootConfiguredError?: string;
   trustedAttestationRootConfigured?: boolean;
   trustedAttestationRootValidated?: boolean;
   trustedAttestationRootFingerprintSha256?: string;
+  trustedAttestationRootValidationAttempted?: boolean;
+  trustedAttestationRootValidationError?: string;
+  hardwareSecurityClass?: string;
+  attestationSecurityLevel?: string;
+  keymasterSecurityLevel?: string;
 };
 
 export type ArgusProofRecord = {
@@ -113,4 +121,6 @@ export type RelayerRegistrationResult = {
   feePayer?: string;
   sponsoredGas: boolean;
   verificationUrl: string;
+  deviceEvidenceSummary?: Partial<ArgusDeviceEvidenceSummary>;
+  level4AttestationVerdict?: Record<string, unknown>;
 };

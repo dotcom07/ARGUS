@@ -89,10 +89,13 @@ function buildProofFromRegistration({ registration, request }) {
     useCase: request.useCase,
     verificationUrl: registration.verificationUrl,
     integrityLevel: proofLevel,
-    deviceEvidenceSummary: buildDeviceEvidenceSummary({
-      cameraEvidenceJson: request.cameraEvidenceJson,
-      deviceIntegrityJson: request.deviceIntegrityJson,
-    }),
+    deviceEvidenceSummary: {
+      ...buildDeviceEvidenceSummary({
+        cameraEvidenceJson: request.cameraEvidenceJson,
+        deviceIntegrityJson: request.deviceIntegrityJson,
+      }),
+      ...(registration.deviceEvidenceSummary ?? {}),
+    },
   };
 }
 

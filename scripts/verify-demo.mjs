@@ -85,7 +85,7 @@ assert.match(marketplaceRn, /Nintendo New 3DS LL XL/);
 assert.match(marketplaceRn, /Ricoh WG-M1 Digital Camera/);
 assert.match(marketplaceRn, /nike air jordan 1 mid/);
 assert.match(marketplaceRn, /Argus not verified/);
-assert.match(marketplaceRn, /Your Argus listing/);
+assert.match(marketplaceRn, /Your listing/);
 assert.match(marketplaceRn, /VerificationSnapshot/);
 assert.match(marketplaceRn, /Open Solana Explorer/);
 assert.match(marketplaceRn, /Open Solana scan/);

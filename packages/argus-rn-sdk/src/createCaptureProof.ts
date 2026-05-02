@@ -46,6 +46,13 @@ export async function createCaptureProof(
     return proof;
   }
 
+  const deviceEvidenceSummary = proof.deviceEvidenceSummary
+    ? {
+        ...proof.deviceEvidenceSummary,
+        ...registration.deviceEvidenceSummary,
+      }
+    : undefined;
+
   return {
     ...proof,
     solanaTx: registration.solanaTx,
@@ -55,6 +62,7 @@ export async function createCaptureProof(
     feePayer: registration.feePayer,
     sponsoredGas: registration.sponsoredGas,
     proofRecord: registration.proofRecord,
+    deviceEvidenceSummary,
     verificationUrl: registration.verificationUrl,
   };
 }

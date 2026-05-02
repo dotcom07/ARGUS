@@ -178,6 +178,8 @@ await rejectsAppCaptureWithMismatchedCapturedFileBytes();
 await acceptsLevel2HardwareFallbackEvidence();
 await acceptsLevel3KeystoreEvidence();
 await acceptsLevel3NativeCanonicalKeystoreEvidence();
+await acceptsLevel3WithPendingLevel4MaterialAfterRelayerRootValidation();
+await acceptsLevel3WithPendingLevel4MaterialWithoutTrustedRootAsLevel3();
 await acceptsLevel3HardwareFallbackEvidence();
 await rejectsLevel3KeystoreSignatureMismatch();
 await acceptsLevel4HardwareAttestationEvidence();
@@ -1760,6 +1762,66 @@ async function acceptsLevel3NativeCanonicalKeystoreEvidence() {
 
   assert.equal(result.proofId, level3Proof.proofId);
   assert.equal(result.proofRecord.proofLevel, "app_capture");
+}
+
+async function acceptsLevel3WithPendingLevel4MaterialAfterRelayerRootValidation() {
+  clearCaptureSessions();
+  const level3Proof = rewriteProofAndroidEvidence(proof, {
+    hardwareAttestation: "level4",
+    level: 3,
+  });
+  authorizeProofSession(level3Proof);
+
+  const result = await registerProof(buildRequest(level3Proof));
+  const decision = validateAndroidEvidenceLevel({
+    deviceIntegrity: JSON.parse(level3Proof.deviceIntegrityJson),
+    manifest: level3Proof.manifest,
+    request: buildRequest(level3Proof),
+  });
+
+  assert.equal(result.proofId, level3Proof.proofId);
+  assert.equal(result.proofRecord.proofLevel, "app_capture");
+  assert.equal(decision.acceptedLevel, 3);
+  assert.equal(decision.evidenceLevel, "level_3_keystore_signature");
+  assert.equal(decision.level4AttestationVerdict.acceptedLevel, 4);
+  assert.equal(decision.level4AttestationVerdict.trustedAttestationRootValidated, true);
+  assert.equal(result.deviceEvidenceSummary.evidenceLevel, "level_4_hardware_attestation");
+  assert.equal(result.deviceEvidenceSummary.level4HardwareAttestation, true);
+  assert.equal(result.deviceEvidenceSummary.relayerAcceptedAndroidEvidenceLevel, 4);
+  assert.equal(result.deviceEvidenceSummary.trustedAttestationRootValidated, true);
+  assert.equal(
+    result.deviceEvidenceSummary.trustedAttestationRootFingerprintSha256,
+    certificateSha256(LEVEL4_ATTESTATION_CERTIFICATE_PEM),
+  );
+}
+
+async function acceptsLevel3WithPendingLevel4MaterialWithoutTrustedRootAsLevel3() {
+  clearCaptureSessions();
+  const previousTrustedRoots = process.env.ARGUS_ANDROID_ATTESTATION_ROOT_SHA256;
+  delete process.env.ARGUS_ANDROID_ATTESTATION_ROOT_SHA256;
+  try {
+    const level3Proof = rewriteProofAndroidEvidence(proof, {
+      hardwareAttestation: "level4",
+      level: 3,
+    });
+    authorizeProofSession(level3Proof);
+
+    const result = await registerProof(buildRequest(level3Proof));
+
+    assert.equal(result.proofId, level3Proof.proofId);
+    assert.equal(result.proofRecord.proofLevel, "app_capture");
+    assert.equal(result.deviceEvidenceSummary.evidenceLevel, "level_3_keystore_signature");
+    assert.equal(result.deviceEvidenceSummary.level4HardwareAttestation, false);
+    assert.equal(result.deviceEvidenceSummary.relayerAcceptedAndroidEvidenceLevel, 3);
+    assert.equal(result.deviceEvidenceSummary.trustedAttestationRootConfigured, false);
+    assert.equal(result.deviceEvidenceSummary.trustedAttestationRootValidated, false);
+    assert.match(
+      result.deviceEvidenceSummary.trustedAttestationRootValidationError,
+      /configured Android attestation trust root/,
+    );
+  } finally {
+    process.env.ARGUS_ANDROID_ATTESTATION_ROOT_SHA256 = previousTrustedRoots;
+  }
 }
 
 async function acceptsLevel3HardwareFallbackEvidence() {
