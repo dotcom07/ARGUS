@@ -7,7 +7,6 @@
 Argus is a **B2B Verified Capture SDK and verifier workflow** for platforms that need to enforce a required in-app capture path before a badge, review decision, dispute workflow, claim intake, or field-evidence review depends on a photo. The current reference demo uses used-camera marketplace listings because that workflow is visual and easy to judge, but the root problem is broader: AI-generated, reused, edited, or imported photos being submitted as if they were real in-app captures. Future use cases such as insurance claims, returns, rental/real-estate condition media, and field-work evidence reuse the same capture-provenance layer with their own relayer/verifier policy. When a verifier needs an independent record beyond one platform database, Argus writes compact authorized commitments to the Argus Registry on Solana.
 
 X: [@ArgusSDK](https://x.com/ArgusSDK)  
-Brand assets: [`x_images/Argus_logo.png`](./x_images/Argus_logo.png), [`x_images/Argus_banner.png`](./x_images/Argus_banner.png)
 
 ## What Argus Does
 
