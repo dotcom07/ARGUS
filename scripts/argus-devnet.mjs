@@ -15,6 +15,7 @@ import {
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const REGISTRY_DIR = path.join(ROOT_DIR, "programs/argus-registry");
+const DEVNET_KEYPAIR_ENV_PATH = ".argus-devnet-keypair.json";
 const DEVNET_KEYPAIR_PATH = path.join(ROOT_DIR, ".argus-devnet-keypair.json");
 const REGISTRY_PROGRAM_KEYPAIR_PATH = path.join(ROOT_DIR, ".argus-registry-program-keypair.json");
 const ANCHOR_PROGRAM_KEYPAIR_PATH = path.join(
@@ -411,11 +412,11 @@ async function syncDotEnv({ programId, authorizedRelayer }) {
     SOLANA_CLUSTER: "devnet",
     SOLANA_RPC_URL: rpcUrl,
     ANCHOR_PROVIDER_URL: rpcUrl,
-    ANCHOR_WALLET: DEVNET_KEYPAIR_PATH,
-    SOLANA_KEYPAIR_PATH: DEVNET_KEYPAIR_PATH,
+    ANCHOR_WALLET: DEVNET_KEYPAIR_ENV_PATH,
+    SOLANA_KEYPAIR_PATH: DEVNET_KEYPAIR_ENV_PATH,
     SOLANA_PUBLIC_KEY: authorizedRelayer,
     ARGUS_RELAYER_MODE: "solana",
-    ARGUS_RELAYER_KEYPAIR: DEVNET_KEYPAIR_PATH,
+    ARGUS_RELAYER_KEYPAIR: DEVNET_KEYPAIR_ENV_PATH,
     ARGUS_AUTHORIZED_RELAYER_PUBLIC_KEY: authorizedRelayer,
     ARGUS_REGISTRY_PROGRAM_ID: programId,
     ARGUS_VERIFIER_BASE_URL_ALLOWLIST: verifierAllowlist,

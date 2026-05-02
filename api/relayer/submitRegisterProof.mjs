@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
 import {
   Connection,
@@ -19,6 +21,7 @@ import { validateAndConsumeCaptureSession } from "./sessionStore.mjs";
 loadEnv();
 
 const TRUSTED_REGISTRY_PROGRAM_ID = "STmkbEWTmfBJR2mDHrbvKNjo2spT6mPU9668mw2hMaL";
+const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const REGISTRY_SCHEMA_VERSION = 1;
 const MANIFEST_SCHEMA_VERSION = "argus.manifest.v1";
 const SUPPORTED_PROOF_LEVELS = new Set(["app_capture"]);
@@ -165,8 +168,12 @@ async function loadRelayerKeypair() {
     throw new Error("ARGUS_RELAYER_KEYPAIR or SOLANA_KEYPAIR_PATH is required");
   }
 
-  const rawKeypair = await readFile(keypairPath, "utf8");
+  const rawKeypair = await readFile(resolveRepoPath(keypairPath), "utf8");
   return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(rawKeypair)));
+}
+
+function resolveRepoPath(value) {
+  return path.isAbsolute(value) ? value : path.resolve(ROOT_DIR, value);
 }
 
 function assertAuthorizedRelayerSigner(relayerPublicKey) {
