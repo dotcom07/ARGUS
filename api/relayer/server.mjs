@@ -104,6 +104,13 @@ async function routeRequest(request, response) {
         ...registration,
         explorerLinks: storedBundle.explorerLinks,
       });
+      recordRegistrationProgress(registration.proofId, "response_sent", "Registration response sent", {
+        solanaTx: registration.solanaTx,
+      });
+      console.info("[Argus relayer] register proof response sent", {
+        proofId: shortValue(registration.proofId),
+        solanaTx: shortValue(registration.solanaTx),
+      });
     } catch (error) {
       recordRegistrationProgress(body.proofId, "failed", "Registration failed", {
         message: error instanceof Error ? error.message : String(error),

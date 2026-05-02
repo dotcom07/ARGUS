@@ -99,6 +99,9 @@ const categoryLinks: Array<{ label: string; icon: FigmaIconName }> = [
   { label: "Collectibles", icon: "plusSquare" },
 ];
 
+const REGISTRATION_PROGRESS_POLL_MS = 1_200;
+const PENDING_DOT_MS = 420;
+
 const homeListings: DemoHomeListing[] = [
   {
     condition: "Good used",
@@ -145,12 +148,14 @@ export default function MarketplaceDemoApp() {
   const [listingForm, setListingForm] = useState<ListingForm>(emptyListingForm);
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [registeringDraftId, setRegisteringDraftId] = useState<string | null>(null);
+  const [pendingDotCount, setPendingDotCount] = useState(1);
   const [registrationProgressByProofId, setRegistrationProgressByProofId] = useState<
     Record<string, RegistrationProgressStage[]>
   >({});
   const pendingListingsByProofId = useRef(new Map<string, MarketplaceListing>());
   const pendingProofsByProofId = useRef(new Map<string, ArgusProof>());
   const lastPendingProofId = useRef<string | null>(null);
+  const hydratingProofIds = useRef(new Set<string>());
 
   const activeDraft = drafts.find((item) => item.listing.id === activeDraftId) ?? drafts[0] ?? null;
   const proof = activeDraft?.proof ?? null;
@@ -166,6 +171,10 @@ export default function MarketplaceDemoApp() {
   const activeListing = activeDraft?.listing ?? buildListingFromForm(listingForm, "preview-listing");
   const activeProgress = proof?.proofId ? (registrationProgressByProofId[proof.proofId] ?? []) : [];
   const canCreateListing = Boolean(listingForm.title.trim() && listingForm.price.trim());
+  const hasRegisteringDraft = drafts.some(
+    (draft) => draft.backendStatus === "registering" || registeringDraftId === draft.listing.id,
+  );
+  const pendingDots = ".".repeat(pendingDotCount);
 
   useEffect(() => {
     configure({
@@ -198,13 +207,51 @@ export default function MarketplaceDemoApp() {
     void pollProgress();
     const intervalId = setInterval(() => {
       void pollProgress();
-    }, 1_200);
+    }, REGISTRATION_PROGRESS_POLL_MS);
 
     return () => {
       isCancelled = true;
       clearInterval(intervalId);
     };
   }, [drafts, registeringDraftId]);
+
+  useEffect(() => {
+    if (!hasRegisteringDraft) {
+      return undefined;
+    }
+
+    const intervalId = setInterval(() => {
+      setPendingDotCount((current) => (current % 3) + 1);
+    }, PENDING_DOT_MS);
+
+    return () => clearInterval(intervalId);
+  }, [hasRegisteringDraft]);
+
+  useEffect(() => {
+    drafts.forEach((draft) => {
+      const proofId = draft.proof.proofId;
+      if (!shouldHydrateStoredProof(draft) || hydratingProofIds.current.has(proofId)) {
+        return;
+      }
+
+      hydratingProofIds.current.add(proofId);
+      void fetchStoredProof(proofId)
+        .then((storedProof) => {
+          if (!storedProof) {
+            return;
+          }
+
+          console.info("[Marketplace demo] hydrated proof bundle from relayer", {
+            proofId: shortenHash(proofId),
+            photoBytesBase64Length: storedProof.photoBytesBase64?.length ?? 0,
+          });
+          setDrafts((current) => mergeHydratedProof(current, storedProof));
+        })
+        .finally(() => {
+          hydratingProofIds.current.delete(proofId);
+        });
+    });
+  }, [drafts]);
 
   async function refreshRegistrationProgress(proofId: string, isCancelled = () => false) {
     const stages = await fetchRegistrationProgress(proofId);
@@ -247,6 +294,11 @@ export default function MarketplaceDemoApp() {
 
   function handleNativeProofCreated(createdProof: ArgusProof) {
     const listingForProof = createListingFromCurrentForm();
+    console.info("[Marketplace demo] native proof ready; pre-indexing listing", {
+      listingId: listingForProof.id,
+      photoBytesBase64Length: createdProof.photoBytesBase64?.length ?? 0,
+      proofId: shortenHash(createdProof.proofId),
+    });
     pendingListingsByProofId.current.set(createdProof.proofId, listingForProof);
     pendingProofsByProofId.current.set(createdProof.proofId, createdProof);
     lastPendingProofId.current = createdProof.proofId;
@@ -263,6 +315,12 @@ export default function MarketplaceDemoApp() {
 
   function handleProofCreated(createdProof: ArgusProof) {
     const { listing: listingForProof, wasPreindexed } = takeListingForProof(createdProof);
+    console.info("[Marketplace demo] relayer registration resolved", {
+      listingId: listingForProof.id,
+      proofId: shortenHash(createdProof.proofId),
+      solanaTx: shortenHash(createdProof.solanaTx),
+      wasPreindexed,
+    });
     setCaptureError(null);
     if (!wasPreindexed) {
       resetListingForm();
@@ -357,6 +415,7 @@ export default function MarketplaceDemoApp() {
       uploadSource: UploadSource;
     },
   ) {
+    const startedAt = nowMs();
     const nextDraft = saveLocalListingDraft(
       buildListingDraft({
         backendMessage: options.backendMessage,
@@ -366,8 +425,14 @@ export default function MarketplaceDemoApp() {
         uploadSource: options.uploadSource,
       }),
     );
-    setDrafts(loadLocalListingDrafts());
+    setDrafts((current) => upsertLocalDraftState(current, nextDraft));
     setActiveDraftId(nextDraft.listing.id);
+    console.info("[Marketplace demo] listing draft state updated", {
+      backendStatus: options.backendStatus,
+      listingId: nextDraft.listing.id,
+      proofId: shortenHash(nextProof.proofId),
+      elapsedMs: Math.round(nowMs() - startedAt),
+    });
   }
 
   function createListingFromCurrentForm(): MarketplaceListing {
@@ -416,6 +481,7 @@ export default function MarketplaceDemoApp() {
           {activeTab === "home" ? (
             <HomeScreen
               drafts={drafts}
+              pendingDots={pendingDots}
               registeringDraftId={registeringDraftId}
             />
           ) : activeTab === "selling" ? (
@@ -494,7 +560,7 @@ export default function MarketplaceDemoApp() {
                     <View style={styles.badgeRow}>
                       <Text style={styles.conditionPill}>{activeListing.condition || "Condition not set"}</Text>
                       <Text style={isProductionProof ? styles.verifiedPill : styles.pendingPill}>
-                        {getListingStatus(activeDraft, isRegistering)}
+                        {getListingStatus(activeDraft, isRegistering, pendingDots)}
                       </Text>
                     </View>
                     <Text style={styles.price}>{activeListing.price}</Text>
@@ -510,11 +576,13 @@ export default function MarketplaceDemoApp() {
                       backendStatus={backendStatus}
                       isRegistering={isRegistering}
                       isSimulatorPreview={isSimulatorPreview}
+                      pendingDots={pendingDots}
                       proof={proof}
                     />
                     <RegistrationProgressList
                       backendStatus={backendStatus}
                       isRegistering={isRegistering}
+                      pendingDots={pendingDots}
                       stages={activeProgress}
                     />
                   </View>
@@ -561,6 +629,7 @@ export default function MarketplaceDemoApp() {
                       isRegistering={registeringDraftId === item.listing.id}
                       key={item.listing.id}
                       onPress={() => setActiveDraftId(item.listing.id)}
+                      pendingDots={pendingDots}
                     />
                   ))
                 ) : (
@@ -620,9 +689,11 @@ function EbayWordmark() {
 
 function HomeScreen({
   drafts,
+  pendingDots,
   registeringDraftId,
 }: {
   drafts: LocalListingDraft[];
+  pendingDots: string;
   registeringDraftId: string | null;
 }) {
   return (
@@ -643,6 +714,7 @@ function HomeScreen({
               draft={draft}
               isRegistering={registeringDraftId === draft.listing.id}
               key={draft.listing.id}
+              pendingDots={pendingDots}
             />
           ))}
         </View>
@@ -725,11 +797,13 @@ function SellingDraftCard({
   isActive,
   isRegistering,
   onPress,
+  pendingDots,
 }: {
   draft: LocalListingDraft;
   isActive: boolean;
   isRegistering: boolean;
   onPress(): void;
+  pendingDots: string;
 }) {
   const proof = draft.proof;
   const level = getArgusEvidenceLevelLabel(proof) ?? proof.proofRecord?.proofLevel ?? proof.proofLevel ?? "Pending";
@@ -746,7 +820,7 @@ function SellingDraftCard({
         <Text style={styles.listingPrice}>{draft.listing.price}</Text>
         <View style={styles.badgeRow}>
           <Text style={isArgusProductionProof(proof) ? styles.verifiedPill : styles.pendingPill}>
-            {getListingStatus(draft, isRegistering)}
+            {getListingStatus(draft, isRegistering, pendingDots)}
           </Text>
           <Text style={styles.pendingPill}>{level}</Text>
         </View>
@@ -761,14 +835,16 @@ function SellingDraftCard({
 function ArgusHomeListing({
   draft,
   isRegistering,
+  pendingDots,
 }: {
   draft: LocalListingDraft;
   isRegistering: boolean;
+  pendingDots: string;
 }) {
   const proof = draft.proof;
   const solanaUrl = getSolanaExplorerUrl(proof);
   const level = getArgusEvidenceLevelLabel(proof) ?? proof.proofRecord?.proofLevel ?? proof.proofLevel;
-  const statusLabel = getListingStatus(draft, isRegistering);
+  const statusLabel = getListingStatus(draft, isRegistering, pendingDots);
 
   return (
     <View style={styles.argusHomeCard}>
@@ -784,7 +860,7 @@ function ArgusHomeListing({
           <ProofDetail label="Level" value={level ?? "Pending"} />
           <ProofDetail label="Registry" value={proof.proofRecord?.status ?? "pending"} />
           <ProofDetail label="Solana" value={proof.solanaTx ? shortenHash(proof.solanaTx) : "Pending"} />
-          <ProofDetail label="Backend" value={statusCopy(draft.backendStatus, isRegistering)} />
+          <ProofDetail label="Backend" value={statusCopy(draft.backendStatus, isRegistering, pendingDots)} />
         </View>
         <Pressable
           accessibilityRole="link"
@@ -817,10 +893,12 @@ function PlaceholderTab({ label }: { label: string }) {
 function RegistrationProgressList({
   backendStatus,
   isRegistering,
+  pendingDots,
   stages,
 }: {
   backendStatus: ListingBackendStatus;
   isRegistering: boolean;
+  pendingDots: string;
   stages: RegistrationProgressStage[];
 }) {
   const visibleStages =
@@ -829,7 +907,10 @@ function RegistrationProgressList({
       : [
           {
             at: "",
-            label: isRegistering || backendStatus === "registering" ? "Waiting for relayer" : "No live relayer progress",
+            label:
+              isRegistering || backendStatus === "registering"
+                ? `Waiting for relayer${pendingDots}`
+                : "No live relayer progress",
             stage: "waiting",
           },
         ];
@@ -853,11 +934,13 @@ function RegistrationProgressList({
 export function VerificationSnapshot({
   backendStatus,
   isRegistering,
+  pendingDots = "",
   proof,
   isSimulatorPreview = false,
 }: {
   backendStatus: ListingBackendStatus;
   isRegistering: boolean;
+  pendingDots?: string;
   proof: ArgusProof | null;
   isSimulatorPreview?: boolean;
 }) {
@@ -889,7 +972,7 @@ export function VerificationSnapshot({
         <ProofDetail label="Level" value={displayedEvidenceLevel ?? "Pending"} />
         <ProofDetail label="Registry" value={registryStatus} />
         <ProofDetail label="Solana" value={solanaTx ? shortenHash(solanaTx) : "Pending"} />
-        <ProofDetail label="Backend" value={statusCopy(backendStatus, isRegistering)} />
+        <ProofDetail label="Backend" value={statusCopy(backendStatus, isRegistering, pendingDots)} />
       </View>
       <Text style={styles.proofTiny}>{proof ? `Proof ${shortenHash(proof.proofId)}` : "Proof pending"}</Text>
       <Pressable
@@ -949,7 +1032,7 @@ function EvidenceLine({ label, isReady }: { label: string; isReady: boolean }) {
 
 function buildListingFromForm(form: ListingForm, listingId: string): MarketplaceListing {
   const title = form.title.trim() || "Untitled item";
-  const price = form.price.trim() || "$0.00";
+  const price = formatListingPrice(form.price.trim());
   const condition = form.condition.trim() || "Condition not set";
   const location = form.location.trim() || "Seller location not set";
 
@@ -981,12 +1064,12 @@ function getDraftPhotoUri(draft: LocalListingDraft | null): string {
     return "";
   }
 
-  return draft.photoUri;
+  return draft.photoUri || photoDataUri(draft.proof.photoBytesBase64);
 }
 
-function getListingStatus(draft: LocalListingDraft, isRegistering: boolean): string {
+function getListingStatus(draft: LocalListingDraft, isRegistering: boolean, pendingDots = ""): string {
   if (isRegistering || draft.backendStatus === "registering") {
-    return "Registering";
+    return `Registering${pendingDots}`;
   }
 
   if (isArgusProductionProof(draft.proof)) {
@@ -1011,9 +1094,9 @@ function getListingStatus(draft: LocalListingDraft, isRegistering: boolean): str
   return "Capture proof pending";
 }
 
-function statusCopy(status: ListingBackendStatus, isRegistering: boolean): string {
+function statusCopy(status: ListingBackendStatus, isRegistering: boolean, pendingDots = ""): string {
   if (isRegistering || status === "registering") {
-    return "Contacting backend";
+    return `Contacting backend${pendingDots}`;
   }
 
   if (status === "registered") {
@@ -1086,10 +1169,38 @@ async function fetchRegistrationProgress(proofId: string): Promise<RegistrationP
   }
 }
 
+async function fetchStoredProof(proofId: string): Promise<ArgusProof | null> {
+  const proofUrl = buildStoredProofUrl(proofId);
+  if (!proofUrl) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(proofUrl);
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as { proof?: ArgusProof };
+    return payload.proof ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function buildRegistrationProgressUrl(proofId: string): string | null {
   try {
     const baseUrl = ARGUS_DEMO_BACKEND_URL.replace(/\/+$/, "");
     return `${baseUrl}/api/registrations/${encodeURIComponent(proofId)}/progress`;
+  } catch {
+    return null;
+  }
+}
+
+function buildStoredProofUrl(proofId: string): string | null {
+  try {
+    const baseUrl = ARGUS_DEMO_BACKEND_URL.replace(/\/+$/, "");
+    return `${baseUrl}/api/proofs/${encodeURIComponent(proofId)}`;
   } catch {
     return null;
   }
@@ -1110,6 +1221,61 @@ function formatProgressTime(value: string): string {
 
 function hasText(value?: string): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function shouldHydrateStoredProof(draft: LocalListingDraft): boolean {
+  return (
+    draft.backendStatus !== "pending" &&
+    hasText(draft.proof.proofId) &&
+    (!hasText(draft.proof.photoBytesBase64) || !hasText(draft.proof.canonicalManifestJson))
+  );
+}
+
+function mergeHydratedProof(drafts: LocalListingDraft[], storedProof: ArgusProof): LocalListingDraft[] {
+  return drafts.map((draft) =>
+    draft.proof.proofId === storedProof.proofId
+      ? {
+          ...draft,
+          proof: {
+            ...storedProof,
+            proofRecord: storedProof.proofRecord ?? draft.proof.proofRecord,
+            solanaTx: storedProof.solanaTx ?? draft.proof.solanaTx,
+          },
+        }
+      : draft,
+  );
+}
+
+function upsertLocalDraftState(drafts: LocalListingDraft[], draft: LocalListingDraft): LocalListingDraft[] {
+  const existingIndex = drafts.findIndex((item) => item.listing.id === draft.listing.id);
+  if (existingIndex === -1) {
+    return [draft, ...drafts];
+  }
+
+  const nextDrafts = [...drafts];
+  nextDrafts[existingIndex] = draft;
+  return nextDrafts;
+}
+
+function photoDataUri(photoBytesBase64?: string): string {
+  return photoBytesBase64 ? `data:image/jpeg;base64,${photoBytesBase64}` : "";
+}
+
+function formatListingPrice(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "$0.00";
+  }
+
+  if (/[$€£¥₩]|^(US|AU|CA|NZ|HK|SG)\s*\$/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `$${trimmed}`;
+}
+
+function nowMs(): number {
+  return Date.now();
 }
 
 const styles = StyleSheet.create({
@@ -1251,7 +1417,7 @@ const styles = StyleSheet.create({
   },
   homePrice: {
     color: "#111827",
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "800",
   },
   notVerifiedPill: {
@@ -1347,7 +1513,7 @@ const styles = StyleSheet.create({
   },
   price: {
     color: "#111827",
-    fontSize: 31,
+    fontSize: 24,
     fontWeight: "800",
     marginTop: 8,
   },
@@ -1591,7 +1757,7 @@ const styles = StyleSheet.create({
   },
   listingPrice: {
     color: "#111827",
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: "800",
   },
   proofTiny: {

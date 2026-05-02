@@ -77,9 +77,10 @@ export function saveLocalListingDrafts(drafts: LocalListingDraft[]): LocalListin
   memoryDrafts = drafts;
   memoryDraft = drafts[0] ?? null;
   const storage = getLocalStorage();
-  storage?.setItem(STORAGE_LIST_KEY, JSON.stringify(drafts));
+  const persistedDrafts = drafts.map(compactDraftForStorage);
+  storage?.setItem(STORAGE_LIST_KEY, JSON.stringify(persistedDrafts));
   if (memoryDraft) {
-    storage?.setItem(STORAGE_KEY, JSON.stringify(memoryDraft));
+    storage?.setItem(STORAGE_KEY, JSON.stringify(compactDraftForStorage(memoryDraft)));
   }
   return drafts;
 }
@@ -102,11 +103,46 @@ export function buildListingDraft({
     backendStatus,
     listing,
     metadataJson: proof.metadataJson ?? "{}",
-    photoBytesBase64: proof.photoBytesBase64 ?? "",
-    photoUri: listing.photoUrl || photoDataUri(proof.photoBytesBase64),
+    photoBytesBase64: "",
+    photoUri: listing.photoUrl || "",
     proof,
     savedAt: new Date().toISOString(),
     uploadSource,
+  };
+}
+
+function compactDraftForStorage(draft: LocalListingDraft): LocalListingDraft {
+  return {
+    ...draft,
+    photoBytesBase64: "",
+    photoUri: draft.listing.photoUrl || "",
+    proof: compactProofForStorage(draft.proof),
+  };
+}
+
+function compactProofForStorage(proof: ArgusProof): ArgusProof {
+  return {
+    appIdentityHash: proof.appIdentityHash,
+    capturedAt: proof.capturedAt,
+    captureSessionId: proof.captureSessionId,
+    deviceEvidenceSummary: proof.deviceEvidenceSummary,
+    feePayer: proof.feePayer,
+    imageHash: proof.imageHash,
+    integrityLevel: proof.integrityLevel,
+    manifestHash: proof.manifestHash,
+    nonce: proof.nonce,
+    partnerId: proof.partnerId,
+    partnerIdHash: proof.partnerIdHash,
+    proofId: proof.proofId,
+    proofLevel: proof.proofLevel,
+    proofRecord: proof.proofRecord,
+    registryAddress: proof.registryAddress,
+    registryProgramId: proof.registryProgramId,
+    relayer: proof.relayer,
+    solanaTx: proof.solanaTx,
+    sponsoredGas: proof.sponsoredGas,
+    useCase: proof.useCase,
+    verificationUrl: proof.verificationUrl,
   };
 }
 
@@ -120,10 +156,6 @@ function upsertDraft(drafts: LocalListingDraft[], draft: LocalListingDraft): Loc
   const nextDrafts = [...drafts];
   nextDrafts[existingIndex] = draft;
   return nextDrafts;
-}
-
-function photoDataUri(photoBytesBase64?: string): string {
-  return photoBytesBase64 ? `data:image/jpeg;base64,${photoBytesBase64}` : "";
 }
 
 function getLocalStorage(): LocalStorageLike | undefined {

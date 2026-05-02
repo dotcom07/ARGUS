@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { createCaptureProof } from "./createCaptureProof";
 import type { ArgusProof, ArgusUseCase } from "./types";
@@ -17,10 +17,25 @@ type ArgusCameraProps = {
 export function ArgusCamera(props: ArgusCameraProps) {
   const [isCapturing, setIsCapturing] = useState(false);
   const [statusLabel, setStatusLabel] = useState("Capture with Argus SDK");
+  const [pendingDotCount, setPendingDotCount] = useState(1);
+  const pendingDots = isCapturing ? ".".repeat(pendingDotCount) : "";
+
+  useEffect(() => {
+    if (!isCapturing) {
+      setPendingDotCount(1);
+      return undefined;
+    }
+
+    const intervalId = setInterval(() => {
+      setPendingDotCount((current) => (current % 3) + 1);
+    }, 420);
+
+    return () => clearInterval(intervalId);
+  }, [isCapturing]);
 
   async function handlePress() {
     setIsCapturing(true);
-    setStatusLabel("Opening camera...");
+    setStatusLabel("Opening camera");
 
     try {
       const proof = await createCaptureProof(
@@ -31,7 +46,7 @@ export function ArgusCamera(props: ArgusCameraProps) {
         },
         {
           onNativeProofCreated(proof) {
-            setStatusLabel("Verifying with Argus...");
+            setStatusLabel("Verifying with Argus");
             props.onNativeProofCreated?.(proof);
           },
         },
@@ -60,7 +75,7 @@ export function ArgusCamera(props: ArgusCameraProps) {
         }}
       >
         <Text style={{ color: "#ffffff", fontSize: 15, fontWeight: "800" }}>
-          {statusLabel}
+          {statusLabel}{pendingDots}
         </Text>
       </Pressable>
     </View>
