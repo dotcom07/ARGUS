@@ -7,6 +7,7 @@ type ArgusCameraProps = {
   partnerId: string;
   useCase: ArgusUseCase;
   metadata: Record<string, string | number | boolean | null>;
+  onNativeProofCreated?(proof: ArgusProof): void;
   onProofCreated(proof: ArgusProof): void;
   onError?(error: Error): void;
 };
@@ -29,8 +30,9 @@ export function ArgusCamera(props: ArgusCameraProps) {
           metadata: props.metadata,
         },
         {
-          onNativeProofCreated() {
+          onNativeProofCreated(proof) {
             setStatusLabel("Verifying with Argus...");
+            props.onNativeProofCreated?.(proof);
           },
         },
       );

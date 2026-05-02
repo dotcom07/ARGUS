@@ -7,6 +7,7 @@ import {
   assertRegistrationJsonTextLimits,
   assertVerifierBaseUrlTextLimit,
 } from "./requestTextPolicy.mjs";
+import { recordRegistrationProgress } from "./registrationProgress.mjs";
 import { validateAndConsumeCaptureSession } from "./sessionStore.mjs";
 
 const DEFAULT_REGISTRY_ADDRESS = "STmkbEWTmfBJR2mDHrbvKNjo2spT6mPU9668mw2hMaL";
@@ -41,6 +42,12 @@ export async function registerProof(request) {
     mode: relayerMode,
     submitToSolana,
   });
+  recordRegistrationProgress(normalizedRequest.proofId, "proof_validated", "Proof bundle validated", {
+    mode: relayerMode,
+    proofLevel: normalizedRequest.proofLevel,
+    submitToSolana,
+    useCase: normalizedRequest.useCase,
+  });
   assertProductionSolanaMode(submitToSolana);
   const verificationUrl = buildVerificationUrl(
     normalizedRequest.verifierBaseUrl,
@@ -55,12 +62,29 @@ export async function registerProof(request) {
       proofId: shortValue(normalizedRequest.proofId),
       manifestHash: shortValue(normalizedRequest.manifestHash),
     });
+    recordRegistrationProgress(
+      normalizedRequest.proofId,
+      "solana_registration_starting",
+      "Solana registration starting",
+      {
+        manifestHash: normalizedRequest.manifestHash,
+      },
+    );
     const solanaResult = await submitRegisterProof(normalizedRequest);
     console.info("[Argus relayer] Solana registration finished", {
       proofId: shortValue(normalizedRequest.proofId),
       solanaTx: shortValue(solanaResult.solanaTx),
       proofRecord: shortValue(solanaResult.proofRecord),
     });
+    recordRegistrationProgress(
+      normalizedRequest.proofId,
+      "solana_registration_finished",
+      "Solana registration finished",
+      {
+        proofRecord: solanaResult.proofRecord,
+        solanaTx: solanaResult.solanaTx,
+      },
+    );
     const proofRecord = buildProofRecord(normalizedRequest, manifest, {
       registeredAt: new Date().toISOString(),
       relayer: solanaResult.relayer,
@@ -115,6 +139,9 @@ export async function registerProof(request) {
   console.info("[Argus relayer] demo registration built", {
     proofId: shortValue(normalizedRequest.proofId),
     solanaTx: shortValue(solanaTx),
+  });
+  recordRegistrationProgress(normalizedRequest.proofId, "demo_registration_built", "Demo registration built", {
+    solanaTx,
   });
 
   return {

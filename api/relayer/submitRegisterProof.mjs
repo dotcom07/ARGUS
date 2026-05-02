@@ -16,6 +16,7 @@ import { assertCanonicalJsonBytes, canonicalJsonNumberLexeme } from "./canonical
 import { assertPartnerAppAuthorized } from "./partnerPolicy.mjs";
 import { assertPhotoBytesBase64TextLimit, decodeCanonicalPhotoBytes } from "./photoBytesPolicy.mjs";
 import { assertRegistrationJsonTextLimits } from "./requestTextPolicy.mjs";
+import { recordRegistrationProgress } from "./registrationProgress.mjs";
 import { validateAndConsumeCaptureSession } from "./sessionStore.mjs";
 
 loadEnv();
@@ -51,6 +52,10 @@ export async function submitRegisterProof(request) {
     proofLevel: registration.proofLevel,
     useCase: registration.useCase,
   });
+  recordRegistrationProgress(registration.proofId, "submitter_validated", "Solana submitter validated", {
+    proofLevel: registration.proofLevel,
+    useCase: registration.useCase,
+  });
   const rpcUrl = process.env.SOLANA_RPC_URL || process.env.ANCHOR_PROVIDER_URL;
   if (!rpcUrl) {
     throw new Error("SOLANA_RPC_URL or ANCHOR_PROVIDER_URL is required");
@@ -76,6 +81,13 @@ export async function submitRegisterProof(request) {
     proofRecord: proofRecord.toBase58(),
     rpcHost: safeRpcHost(rpcUrl),
   });
+  recordRegistrationProgress(registration.proofId, "instruction_prepared", "Solana instruction prepared", {
+    configAccount: configAccount.toBase58(),
+    proofRecord: proofRecord.toBase58(),
+    registryProgramId: programId.toBase58(),
+    relayer: payer.publicKey.toBase58(),
+    rpcHost: safeRpcHost(rpcUrl),
+  });
 
   const instruction = new TransactionInstruction({
     programId,
@@ -94,6 +106,9 @@ export async function submitRegisterProof(request) {
   console.info("[Argus relayer] capture session consumed before Solana submit", {
     proofId: shortValue(registration.proofId),
     captureSessionId: shortValue(normalizedRequest.captureSessionId),
+  });
+  recordRegistrationProgress(registration.proofId, "session_consumed", "Capture session consumed", {
+    captureSessionId: normalizedRequest.captureSessionId,
   });
   const signature = await sendAndConfirmViaHttp(connection, transaction, [payer], {
     proofId: registration.proofId,
@@ -119,6 +134,9 @@ async function sendAndConfirmViaHttp(connection, transaction, signers, context =
     proofId: shortValue(context.proofId),
     lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
   });
+  recordRegistrationProgress(context.proofId, "transaction_sending", "Sending Solana transaction", {
+    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+  });
   const signature = await connection.sendRawTransaction(transaction.serialize(), {
     skipPreflight: false,
     preflightCommitment: CONFIRMED_COMMITMENT,
@@ -128,10 +146,16 @@ async function sendAndConfirmViaHttp(connection, transaction, signers, context =
     proofId: shortValue(context.proofId),
     signature: shortValue(signature),
   });
+  recordRegistrationProgress(context.proofId, "transaction_submitted", "Solana transaction submitted", {
+    signature,
+  });
   await waitForSignatureViaHttp(connection, signature, latestBlockhash.lastValidBlockHeight);
   console.info("[Argus relayer] Solana transaction confirmed", {
     proofId: shortValue(context.proofId),
     signature: shortValue(signature),
+  });
+  recordRegistrationProgress(context.proofId, "transaction_confirmed", "Solana transaction confirmed", {
+    signature,
   });
   return signature;
 }

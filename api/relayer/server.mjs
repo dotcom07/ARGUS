@@ -3,12 +3,14 @@ import { config as loadEnv } from "dotenv";
 import { openRelayerCaptureSession } from "./openCaptureSession.mjs";
 import { registerProof } from "./registerProof.mjs";
 import { loadProofBundle, storeProofBundle } from "./proofBundleStore.mjs";
+import { loadRegistrationProgress, recordRegistrationProgress } from "./registrationProgress.mjs";
 
 loadEnv();
 
 const DEFAULT_PORT = 8787;
 const MAX_REQUEST_BODY_BYTES = 32 * 1024 * 1024;
 const PROOF_ROUTE_PREFIX = "/api/proofs/";
+const REGISTRATION_PROGRESS_ROUTE_PREFIX = "/api/registrations/";
 
 const server = http.createServer(async (request, response) => {
   setCorsHeaders(response);
@@ -74,24 +76,55 @@ async function routeRequest(request, response) {
 
   if (request.method === "POST" && url.pathname === "/register-proof") {
     const body = await readJsonBody(request);
+    recordRegistrationProgress(body.proofId, "request_received", "Register proof request received", {
+      captureSessionId: body.captureSessionId,
+      imageHash: body.imageHash,
+      manifestHash: body.manifestHash,
+    });
     console.info("[Argus relayer] register proof request received", {
       proofId: shortValue(body.proofId),
       manifestHash: shortValue(body.manifestHash),
       imageHash: shortValue(body.imageHash),
       captureSessionId: shortValue(body.captureSessionId),
     });
-    const registration = await registerProof(body);
-    const storedBundle = await storeProofBundle({ registration, request: body });
-    console.info("[Argus relayer] register proof completed", {
-      proofId: shortValue(registration.proofId),
-      solanaTx: shortValue(registration.solanaTx),
-      proofRecord: shortValue(registration.proofRecord?.address),
-      stored: true,
-    });
-    sendJson(response, 200, {
-      ...registration,
-      explorerLinks: storedBundle.explorerLinks,
-    });
+    try {
+      const registration = await registerProof(body);
+      const storedBundle = await storeProofBundle({ registration, request: body });
+      recordRegistrationProgress(registration.proofId, "bundle_stored", "Proof bundle stored", {
+        proofRecord: registration.proofRecord?.address,
+        solanaTx: registration.solanaTx,
+      });
+      console.info("[Argus relayer] register proof completed", {
+        proofId: shortValue(registration.proofId),
+        solanaTx: shortValue(registration.solanaTx),
+        proofRecord: shortValue(registration.proofRecord?.address),
+        stored: true,
+      });
+      sendJson(response, 200, {
+        ...registration,
+        explorerLinks: storedBundle.explorerLinks,
+      });
+    } catch (error) {
+      recordRegistrationProgress(body.proofId, "failed", "Registration failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+    return;
+  }
+
+  if (
+    request.method === "GET" &&
+    url.pathname.startsWith(REGISTRATION_PROGRESS_ROUTE_PREFIX) &&
+    url.pathname.endsWith("/progress")
+  ) {
+    const proofId = decodeURIComponent(
+      url.pathname.slice(
+        REGISTRATION_PROGRESS_ROUTE_PREFIX.length,
+        -"/progress".length,
+      ),
+    );
+    sendJson(response, 200, loadRegistrationProgress(proofId));
     return;
   }
 

@@ -1,6 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  Alert,
   Image,
   KeyboardAvoidingView,
   Linking,
@@ -20,7 +19,6 @@ import Svg, { Path } from "react-native-svg";
 import {
   ArgusBadge,
   ArgusCamera,
-  ArgusProofLink,
   ARGUS_LOCAL_DEMO_RELAYER,
   configure,
   getArgusEvidenceLevel,
@@ -49,6 +47,17 @@ import {
 
 type TabId = "home" | "myEbay" | "search" | "inbox" | "selling";
 type UploadSource = "argus_camera" | "local_upload";
+type RegistrationProgressStage = {
+  at: string;
+  details?: Record<string, boolean | number | string | undefined>;
+  label: string;
+  stage: string;
+};
+type RegistrationProgressResponse = {
+  proofId: string;
+  stages: RegistrationProgressStage[];
+  updatedAt: string | null;
+};
 type ListingForm = {
   condition: string;
   location: string;
@@ -136,6 +145,12 @@ export default function MarketplaceDemoApp() {
   const [listingForm, setListingForm] = useState<ListingForm>(emptyListingForm);
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [registeringDraftId, setRegisteringDraftId] = useState<string | null>(null);
+  const [registrationProgressByProofId, setRegistrationProgressByProofId] = useState<
+    Record<string, RegistrationProgressStage[]>
+  >({});
+  const pendingListingsByProofId = useRef(new Map<string, MarketplaceListing>());
+  const pendingProofsByProofId = useRef(new Map<string, ArgusProof>());
+  const lastPendingProofId = useRef<string | null>(null);
 
   const activeDraft = drafts.find((item) => item.listing.id === activeDraftId) ?? drafts[0] ?? null;
   const proof = activeDraft?.proof ?? null;
@@ -149,6 +164,7 @@ export default function MarketplaceDemoApp() {
   const isSimulatorPreview = isMarketplaceSimulatorPreviewProof(proof, isSimulatorFallback);
   const hasVerifiedOrPreviewProof = isProductionProof || isLocalOnlyProof || isSimulatorPreview;
   const activeListing = activeDraft?.listing ?? buildListingFromForm(listingForm, "preview-listing");
+  const activeProgress = proof?.proofId ? (registrationProgressByProofId[proof.proofId] ?? []) : [];
   const canCreateListing = Boolean(listingForm.title.trim() && listingForm.price.trim());
 
   useEffect(() => {
@@ -159,18 +175,100 @@ export default function MarketplaceDemoApp() {
     });
   }, []);
 
+  useEffect(() => {
+    const registeringProofIds = drafts
+      .filter((draft) => draft.backendStatus === "registering" || registeringDraftId === draft.listing.id)
+      .map((draft) => draft.proof.proofId)
+      .filter(hasText);
+
+    if (registeringProofIds.length === 0) {
+      return undefined;
+    }
+
+    let isCancelled = false;
+
+    async function pollProgress() {
+      await Promise.all(
+        registeringProofIds.map(async (proofId) => {
+          await refreshRegistrationProgress(proofId, () => isCancelled);
+        }),
+      );
+    }
+
+    void pollProgress();
+    const intervalId = setInterval(() => {
+      void pollProgress();
+    }, 1_200);
+
+    return () => {
+      isCancelled = true;
+      clearInterval(intervalId);
+    };
+  }, [drafts, registeringDraftId]);
+
+  async function refreshRegistrationProgress(proofId: string, isCancelled = () => false) {
+    const stages = await fetchRegistrationProgress(proofId);
+    if (isCancelled() || stages.length === 0) {
+      return;
+    }
+
+    setRegistrationProgressByProofId((current) => ({
+      ...current,
+      [proofId]: stages,
+    }));
+  }
+
   function handleNativeError(error: Error) {
     console.warn("[Marketplace demo] Argus camera error", {
       message: error.message,
       stack: error.stack,
     });
+    const pendingProofId = lastPendingProofId.current;
+    const pendingProof = pendingProofId ? pendingProofsByProofId.current.get(pendingProofId) : null;
+    const pendingListing = pendingProofId ? pendingListingsByProofId.current.get(pendingProofId) : null;
+
+    if (pendingProof && pendingListing) {
+      pendingListingsByProofId.current.delete(pendingProof.proofId);
+      pendingProofsByProofId.current.delete(pendingProof.proofId);
+      lastPendingProofId.current = null;
+      setRegisteringDraftId(null);
+      persistDraft(pendingProof, {
+        backendMessage: `Registration pending: ${error.message}`,
+        backendStatus: "local_only",
+        listing: pendingListing,
+        uploadSource: "argus_camera",
+      });
+      void refreshRegistrationProgress(pendingProof.proofId);
+      return;
+    }
+
     setCaptureError(`SDK camera failed: ${error.message}`);
   }
 
-  function handleProofCreated(createdProof: ArgusProof) {
+  function handleNativeProofCreated(createdProof: ArgusProof) {
     const listingForProof = createListingFromCurrentForm();
+    pendingListingsByProofId.current.set(createdProof.proofId, listingForProof);
+    pendingProofsByProofId.current.set(createdProof.proofId, createdProof);
+    lastPendingProofId.current = createdProof.proofId;
     setCaptureError(null);
     resetListingForm();
+    persistDraft(createdProof, {
+      backendMessage: "Verifying with Argus relayer",
+      backendStatus: "registering",
+      listing: listingForProof,
+      uploadSource: "argus_camera",
+    });
+    setRegisteringDraftId(listingForProof.id);
+  }
+
+  function handleProofCreated(createdProof: ArgusProof) {
+    const { listing: listingForProof, wasPreindexed } = takeListingForProof(createdProof);
+    setCaptureError(null);
+    if (!wasPreindexed) {
+      resetListingForm();
+    }
+    setRegisteringDraftId(null);
+    void refreshRegistrationProgress(createdProof.proofId);
     if (createdProof.proofRecord) {
       const isRegistered = isArgusProductionProof(createdProof);
       persistDraft(createdProof, {
@@ -195,6 +293,20 @@ export default function MarketplaceDemoApp() {
     }
 
     void persistAndRegisterProof(createdProof, listingForProof);
+  }
+
+  function takeListingForProof(proofToResolve: ArgusProof) {
+    const pendingListing = pendingListingsByProofId.current.get(proofToResolve.proofId);
+    if (pendingListing) {
+      pendingListingsByProofId.current.delete(proofToResolve.proofId);
+      pendingProofsByProofId.current.delete(proofToResolve.proofId);
+      if (lastPendingProofId.current === proofToResolve.proofId) {
+        lastPendingProofId.current = null;
+      }
+      return { listing: pendingListing, wasPreindexed: true };
+    }
+
+    return { listing: createListingFromCurrentForm(), wasPreindexed: false };
   }
 
   async function persistAndRegisterProof(createdProof: ArgusProof, listingForProof: MarketplaceListing) {
@@ -265,10 +377,6 @@ export default function MarketplaceDemoApp() {
   function resetListingForm() {
     setListingForm(emptyListingForm);
     setDraftListingId(createListingId());
-  }
-
-  function handleOpenVerifier(url: string) {
-    void Linking.openURL(url).catch(() => Alert.alert("Argus verifier", url));
   }
 
   return (
@@ -357,6 +465,7 @@ export default function MarketplaceDemoApp() {
                       price: listingForm.price.trim(),
                       title: listingForm.title.trim(),
                     }}
+                    onNativeProofCreated={handleNativeProofCreated}
                     onProofCreated={handleProofCreated}
                     onError={handleNativeError}
                   />
@@ -403,13 +512,12 @@ export default function MarketplaceDemoApp() {
                       isSimulatorPreview={isSimulatorPreview}
                       proof={proof}
                     />
-                    <View style={styles.verifierButton}>
-                      <ArgusProofLink proof={proof} onOpen={handleOpenVerifier} />
-                    </View>
+                    <RegistrationProgressList
+                      backendStatus={backendStatus}
+                      isRegistering={isRegistering}
+                      stages={activeProgress}
+                    />
                   </View>
-
-                  <ListingPreview draft={activeDraft} isRegistering={isRegistering} />
-                  <ProductPreview draft={activeDraft} />
 
                   <View style={styles.panel}>
                     <Text style={styles.panelTitle}>SDK checks</Text>
@@ -706,39 +814,38 @@ function PlaceholderTab({ label }: { label: string }) {
   );
 }
 
-function ListingPreview({ draft, isRegistering }: { draft: LocalListingDraft; isRegistering: boolean }) {
+function RegistrationProgressList({
+  backendStatus,
+  isRegistering,
+  stages,
+}: {
+  backendStatus: ListingBackendStatus;
+  isRegistering: boolean;
+  stages: RegistrationProgressStage[];
+}) {
+  const visibleStages =
+    stages.length > 0
+      ? stages.slice(-9)
+      : [
+          {
+            at: "",
+            label: isRegistering || backendStatus === "registering" ? "Waiting for relayer" : "No live relayer progress",
+            stage: "waiting",
+          },
+        ];
+
   return (
-    <View style={styles.panel}>
-      <Text style={styles.panelTitle}>Listing preview</Text>
-      <View style={styles.listingRow}>
-        <ListingPhoto draft={draft} imageStyle={styles.listingThumb} />
-        <View style={styles.listingCopy}>
-          <Text style={styles.listingTitle}>{draft.listing.title}</Text>
-          <Text style={styles.listingPrice}>{draft.listing.price}</Text>
-          <Text style={styles.shipping}>{getListingStatus(draft, isRegistering)}</Text>
-          <Text style={styles.proofTiny}>Proof {shortenHash(draft.proof.proofId)}</Text>
+    <View style={styles.progressPanel}>
+      <Text style={styles.progressTitle}>Relayer progress</Text>
+      {visibleStages.map((stage, index) => (
+        <View key={`${stage.stage}-${stage.at || index}`} style={styles.progressRow}>
+          <View style={styles.progressDot} />
+          <View style={styles.progressCopy}>
+            <Text style={styles.progressLabel}>{stage.label}</Text>
+            {stage.at ? <Text style={styles.progressMeta}>{formatProgressTime(stage.at)}</Text> : null}
+          </View>
         </View>
-      </View>
-    </View>
-  );
-}
-
-function ProductPreview({ draft }: { draft: LocalListingDraft }) {
-  const proof = draft.proof;
-
-  return (
-    <View style={styles.panel}>
-      <Text style={styles.panelTitle}>Item page preview</Text>
-      <ListingPhoto draft={draft} imageStyle={styles.productPhoto} />
-      <Text style={styles.titleSmall}>{draft.listing.title}</Text>
-      <Text style={styles.priceSmall}>{draft.listing.price}</Text>
-      <View style={styles.productBadgeRow}>
-        <ArgusBadge proof={proof} />
-        <FigmaIcon color={proof ? "#0f7b5f" : "#596273"} name={proof ? "shieldCheck" : "shield"} size={18} />
-        <Text style={styles.shipping}>
-          {proof ? "Photo captured for this listing" : "Capture proof appears here after upload"}
-        </Text>
-      </View>
+      ))}
     </View>
   );
 }
@@ -960,6 +1067,51 @@ function getSolanaExplorerUrl(proof: ArgusProof | null): string | undefined {
   return `https://explorer.solana.com/tx/${proof.solanaTx}?cluster=devnet`;
 }
 
+async function fetchRegistrationProgress(proofId: string): Promise<RegistrationProgressStage[]> {
+  const progressUrl = buildRegistrationProgressUrl(proofId);
+  if (!progressUrl) {
+    return [];
+  }
+
+  try {
+    const response = await fetch(progressUrl);
+    if (!response.ok) {
+      return [];
+    }
+
+    const progress = (await response.json()) as RegistrationProgressResponse;
+    return Array.isArray(progress.stages) ? progress.stages : [];
+  } catch {
+    return [];
+  }
+}
+
+function buildRegistrationProgressUrl(proofId: string): string | null {
+  try {
+    const baseUrl = ARGUS_DEMO_BACKEND_URL.replace(/\/+$/, "");
+    return `${baseUrl}/api/registrations/${encodeURIComponent(proofId)}/progress`;
+  } catch {
+    return null;
+  }
+}
+
+function formatProgressTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function hasText(value?: string): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 const styles = StyleSheet.create({
   safeArea: {
     backgroundColor: "#ffffff",
@@ -1161,12 +1313,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     lineHeight: 31,
   },
-  titleSmall: {
-    color: "#111827",
-    fontSize: 19,
-    fontWeight: "800",
-    lineHeight: 25,
-  },
   badgeRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1204,11 +1350,6 @@ const styles = StyleSheet.create({
     fontSize: 31,
     fontWeight: "800",
     marginTop: 8,
-  },
-  priceSmall: {
-    color: "#111827",
-    fontSize: 23,
-    fontWeight: "800",
   },
   shipping: {
     color: "#5f6875",
@@ -1331,9 +1472,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
   },
-  verifierButton: {
-    alignItems: "flex-start",
-  },
   snapshotPanel: {
     backgroundColor: "#ffffff",
     borderColor: "#d6dbe2",
@@ -1382,6 +1520,45 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     lineHeight: 19,
   },
+  progressPanel: {
+    backgroundColor: "#ffffff",
+    borderColor: "#d6dbe2",
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 9,
+    padding: 12,
+  },
+  progressTitle: {
+    color: "#111827",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  progressRow: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 9,
+  },
+  progressDot: {
+    backgroundColor: "#3665f3",
+    borderRadius: 5,
+    height: 10,
+    marginTop: 5,
+    width: 10,
+  },
+  progressCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  progressLabel: {
+    color: "#111827",
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
+  progressMeta: {
+    color: "#5f6875",
+    fontSize: 11,
+  },
   solanaAction: {
     alignItems: "center",
     backgroundColor: "#3665f3",
@@ -1406,20 +1583,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
   },
-  listingRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  listingThumb: {
-    backgroundColor: "#edf0f4",
-    borderRadius: 8,
-    height: 116,
-    width: 116,
-  },
-  listingCopy: {
-    flex: 1,
-    gap: 5,
-  },
   listingTitle: {
     color: "#111827",
     fontSize: 16,
@@ -1435,18 +1598,6 @@ const styles = StyleSheet.create({
     color: "#3665f3",
     fontSize: 12,
     fontWeight: "800",
-  },
-  productPhoto: {
-    aspectRatio: 4 / 3,
-    backgroundColor: "#edf0f4",
-    borderRadius: 8,
-    width: "100%",
-  },
-  productBadgeRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
   },
   photoPlaceholder: {
     alignItems: "center",

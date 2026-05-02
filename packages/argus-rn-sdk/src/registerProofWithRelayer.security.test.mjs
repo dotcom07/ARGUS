@@ -3483,6 +3483,9 @@ function loadMarketplaceDemoAppForTest(initialStateValues = []) {
       return {
         default: React,
         useEffect() {},
+        useRef(initialValue) {
+          return { current: initialValue };
+        },
         useState(initialValue) {
           const fallbackValue = typeof initialValue === "function" ? initialValue() : initialValue;
           const value =
