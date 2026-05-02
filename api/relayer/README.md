@@ -18,7 +18,7 @@ Run the demo HTTP relayer with:
 npm run relayer:server
 ```
 
-It listens on `0.0.0.0:${PORT:-8787}` and exposes `GET /health`, `POST /capture-session`, `POST /register-proof`, and `GET /api/proofs/:proofId`. The demo proof-bundle store writes JSON files under `.argus-relayer-data/proofs` by default; set `ARGUS_PROOF_BUNDLE_DIR` to move that storage outside the repo checkout.
+It listens on `0.0.0.0:${PORT:-8787}` and exposes `GET /health`, `POST /capture-session`, `POST /register-proof`, `GET /api/proofs/:proofId`, `GET /api/proofs/:proofId/photo`, and `GET /api/registrations/:proofId/progress`. The demo proof-bundle store writes JSON files under `.argus-relayer-data/proofs` by default; set `ARGUS_PROOF_BUNDLE_DIR` to move that storage outside the repo checkout.
 
 For the Hyonix/WSL demo server, keep the backend and tunnel alive with tmux:
 
@@ -37,7 +37,7 @@ tmux new -s argus-tunnel
 cloudflared tunnel --url http://localhost:8787
 ```
 
-Use the generated `https://<quick-tunnel>.trycloudflare.com` URL as both `relayerUrl` and `verifierBaseUrl` for the demo app. The current React Native demo URL lives in `apps/shared/argusDemoConfig.ts`; update it whenever Quick Tunnel issues a new URL. The relayer must also have the same URL in `ARGUS_VERIFIER_BASE_URL_ALLOWLIST`, otherwise `/register-proof` rejects the verifier URL before storing the proof bundle.
+Use the generated `https://<quick-tunnel>.trycloudflare.com` URL as both `relayerUrl` and `verifierBaseUrl` for the demo app. Set it as `ARGUS_DEMO_BACKEND_URL` or `EXPO_PUBLIC_ARGUS_DEMO_BACKEND_URL` before rebuilding the Android bundle; the fallback default lives in `apps/shared/argusDemoConfig.ts`. The relayer must also have the same URL in `ARGUS_VERIFIER_BASE_URL_ALLOWLIST`, otherwise `/register-proof` rejects the verifier URL before storing the proof bundle.
 
 Smoke-test the tunnel from another machine:
 
@@ -54,9 +54,9 @@ For devnet/localnet submission, set `ARGUS_RELAYER_MODE=solana` and use `.env` v
 
 `sessionStore.mjs` is the demo in-memory model for backend-opened capture sessions. Production should replace it with durable session storage, partner authentication, and accepted/rejected registration audit logs that record request ID, partner tuple, proof ID, validation outcome, relayer signer, fee payer, sponsored gas decision, registry program ID, and transaction or failure reason. The Rust registry-payload builder also rejects canonical manifest JSON and capture session IDs over 4 KiB, plus zero optional metadata commitments, before hashing/building Argus Registry commitments.
 
-The production `GET /proof-bundle/:proofId` equivalent should return stored canonical manifest, metadata, camera evidence, device integrity evidence, photo object reference or bytes, registry program ID, proof record address, Solana transaction, relayer, fee payer, sponsoredGas, status, and creation time. It must fail closed for missing, duplicated, malformed, revoked, or non-active bundle records and must not describe storage as trusted by itself; the verifier still recomputes all commitments against the registry record, sponsored gas/fee-payer binding, and authorized relayer trust root.
+The production equivalent of `GET /api/proofs/:proofId` should return stored canonical manifest, metadata, camera evidence, device integrity evidence, photo object reference or bytes, registry program ID, proof record address, Solana transaction, relayer, fee payer, sponsoredGas, status, and creation time. It must fail closed for missing, duplicated, malformed, revoked, or non-active bundle records and must not describe storage as trusted by itself; the verifier still recomputes all commitments against the registry record, sponsored gas/fee-payer binding, and authorized relayer trust root.
 
-For the demo/simple verifier mode, the backend can do the recomputation and Solana devnet lookup before returning a verifier result. This keeps the demo frontend thin while still exposing the public onchain commitment for inspection. The backend response should include:
+For the demo/simple verifier mode, the backend does bundle retrieval and recomputation before returning a verifier result. In Solana mode, the stored registration response also carries the devnet transaction signature and proof-record address so the frontend can link to public Solana inspection pages. This keeps the demo frontend thin while still exposing the public onchain commitment when one exists. The backend response should include:
 
 ```text
 - proof bundle fields needed for display and recomputation
@@ -79,7 +79,7 @@ Android evidence levels are carried inside the committed `deviceIntegrityJson` w
 
 `registerProof.mjs` only returns verifier links for allowlisted verifier bases. The default production verifier is `https://verify.argus.dev`; set `ARGUS_VERIFIER_BASE_URL_ALLOWLIST` to a JSON array of trusted base URLs when deploying a branded verifier or Quick Tunnel demo verifier. Base paths are supported only when the exact normalized base path is allowlisted, and duplicate normalized verifier bases fail closed as config errors before consuming sessions. Raw URL paths are checked before parser/proxy normalization: raw slash/backslash traversal is rejected, and encoded separators are accepted only for exact allowlisted base paths and are rejected when they decode into `.` or `..` traversal. Loopback verifier bases, including `http` and `https` localhost, 127/8 IPv4 forms, IPv4-mapped 127/8 IPv6 forms, and `[::1]`, are rejected when `NODE_ENV=production`; production also fails closed if the verifier allowlist itself contains one of those loopback roots. Loopback verifier bases are accepted only for local development. The RN SDK treats its configured HTTPS `verifierBaseUrl` as the verifier trust root, so the app config and relayer allowlist must point to the same base URL.
 
-Returned verifier links have the route shape `<normalizedVerifierBaseUrl>/proof/{proofId}` with no credentials, query, or fragment. RN verifier API calls use `<normalizedVerifierBaseUrl>/api/proofs/{proofId}` under the same trusted base. Verifier/client proof IDs and relayer request proof/hash IDs are canonical lowercase non-zero 64-hex strings. The static browser preview URL above is only the local app shell; its demo preview links must use exact `index.html?proofId={lowercase-64-hex-proofId}` localStorage records, not a production relayer route. A preview URL without `proofId` is invalid and does not auto-load a saved demo preview bundle.
+Returned verifier links have the route shape `<normalizedVerifierBaseUrl>/proof/{proofId}` with no credentials, query, or fragment. RN verifier API calls use `<normalizedVerifierBaseUrl>/api/proofs/{proofId}` under the same trusted base. Verifier/client proof IDs and relayer request proof/hash IDs are canonical lowercase non-zero 64-hex strings. The static browser preview URL above is only the local app shell; its demo preview links use `argus://verify/local-simulator/{proofId}` deep links backed by localStorage records, not a production relayer route.
 
 ## Relayer Policy
 
@@ -93,7 +93,7 @@ Before calling `register_proof`, validate:
 - capture session ID + nonce + partner ID + use case + app identity hash form a fresh, known authorization tuple
 - partner app identity / signing certificate hash matches the configured partner
 - request proof/hash IDs are canonical lowercase non-zero 64-hex strings
-- canonical manifest, capture session ID, metadata, camera evidence, and device integrity JSON stay within the shared Android, Rust core, and relayer UTF-8 text caps: 4 KiB, 4 KiB, 64 KiB, 16 KiB, and 16 KiB respectively; the registry-payload builder repeats the canonical manifest JSON and capture session ID caps before deriving registry commitments
+- canonical manifest, capture session ID, metadata, camera evidence, and device integrity JSON stay within the current RN/Kotlin/relayer UTF-8 text caps: 4 KiB, 4 KiB, 64 KiB, 64 KiB, and 64 KiB respectively; the standalone Rust core helper still has a 16 KiB optional evidence input cap, and the registry-payload builder repeats the canonical manifest JSON and capture session ID caps before deriving registry commitments
 - manifest canonicalization and manifestHash are correct
 - metadata, camera evidence, and device integrity JSON are exact canonical JSON bytes and match their manifest commitments; these JSON fields must use sorted unique object keys, no outer whitespace, `JSON.stringify`-compatible finite number lexemes, and Android SDK/Rust control-character escaping rules; required integer fields must be plain integer tokens matching the committed values
 - canonical `photoBytesBase64` decodes to submitted photo bytes under the 20 MiB native-capture photo byte cap; those bytes pass the basic JPEG-like native-capture structure gate and their SHA-256 matches the submitted `imageHash` and `manifest.image_sha256`

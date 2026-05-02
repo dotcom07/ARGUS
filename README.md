@@ -117,17 +117,17 @@ Solana stores compact commitments only. Photos and raw evidence stay offchain. T
 The marketplace demo can show a simple backend-assisted verification flow inside the listing and product-detail surfaces:
 
 ```text
-ebay_argus app -> Argus backend -> stored proof bundle + Solana devnet lookup
+ebay_argus app -> Argus relayer/verifier API -> stored proof bundle + recomputed match flags
 ```
 
-In this flow, the backend returns the stored proof bundle, recomputed match flags, the Solana transaction signature, and the proof-record account address. The frontend displays the result and links to public Solana inspection pages:
+In this flow, the relayer stores the proof bundle under `.argus-relayer-data/proofs` by default and serves verification data from `GET /api/proofs/:proofId`. The backend response includes the stored proof bundle, recomputed match flags, the Solana transaction signature when one exists, and the proof-record account address when one exists. The frontend displays the result and links to public Solana inspection pages:
 
 ```text
 https://explorer.solana.com/tx/{signature}?cluster=devnet
 https://explorer.solana.com/address/{proofRecordPda}?cluster=devnet
 ```
 
-This is not a fully trustless client-side verifier. The demo backend is the retrieval and recomputation layer; the trust-critical commitment remains the Argus Registry record on Solana, while the marketplace app displays the user-facing capture and verification state.
+This is not a fully trustless client-side verifier. The demo backend is the retrieval and recomputation layer; the trust-critical production commitment remains the Argus Registry record on Solana, while the marketplace app displays the user-facing capture and verification state.
 
 ## Evidence Levels
 
@@ -192,11 +192,11 @@ node -v
 npm -v
 ```
 
-Expected demo runtime:
+Expected demo runtime follows the root package engine:
 
 ```text
-Node v20.20.x
-npm 10.x
+Node >=20.19.4
+npm from the active Node 20 install
 ```
 
 Run the relayer and Cloudflare tunnel in two tmux sessions:
@@ -225,14 +225,14 @@ curl -X POST https://<quick-tunnel>.trycloudflare.com/capture-session \
   --data '{"partnerId":"recommerce-demo","useCase":"marketplace_listing","appIdentityHash":"c5f00555103b31cc35ccbd6119db30b93d1a8244302361acca205c01ff7d247e"}'
 ```
 
-The React Native demo reads the current backend URL from [`apps/shared/argusDemoConfig.ts`](./apps/shared/argusDemoConfig.ts). Quick Tunnel URLs change when the tunnel restarts, so update that file before rebuilding the Android demo.
+The React Native demo reads the backend URL from `ARGUS_DEMO_BACKEND_URL` or `EXPO_PUBLIC_ARGUS_DEMO_BACKEND_URL`, injected by [`babel.config.cjs`](./babel.config.cjs), with a default in [`apps/shared/argusDemoConfig.ts`](./apps/shared/argusDemoConfig.ts). Quick Tunnel URLs change when the tunnel restarts, so update the environment value before rebuilding the Android demo.
 
 App connection checklist:
 
 ```text
 1. Tunnel URL works at /health.
 2. The same URL is in ARGUS_VERIFIER_BASE_URL_ALLOWLIST.
-3. The same URL is in apps/shared/argusDemoConfig.ts.
+3. The same URL is set as ARGUS_DEMO_BACKEND_URL or EXPO_PUBLIC_ARGUS_DEMO_BACKEND_URL for the JS bundle.
 4. Rebuild the Android demo so the JS bundle has the new URL.
 5. Shoot with the in-app CameraX flow and check that /register-proof stores the proof bundle.
 ```
