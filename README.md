@@ -15,7 +15,7 @@ Argus is a React Native SDK and Solana registry prototype that turns in-app phot
 
 ## How It Works
 
-<img src="./images/Argus_Tech/Technical%2002/Architecture%20Picture.png" alt="Argus architecture zones" width="900">
+<img src="./images/Architecture%20Picture.png" alt="Argus architecture zones" width="900">
 
 The verifier checks the whole bundle, not just whether an image hash exists onchain:
 
