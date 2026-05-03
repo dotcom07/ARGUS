@@ -10,6 +10,7 @@
 *.jks
 *.keystore
 local.properties
+*.mp4
 
 node_modules/
 target/

@@ -140,6 +140,30 @@ Argus verifies the required capture path, not scene truth.
 - Do not post confidential implementation details or private submission materials.
 ```
 
+## X Character Limit Rule
+
+Current X limits:
+
+```text
+Standard post: 280 characters.
+Premium longer post: up to 25,000 characters.
+```
+
+Campaign rule:
+
+```text
+Use the 280-character standard post limit.
+Target 260 characters or less for every main post, including hashtags and mentions.
+Use replies or threads instead of Premium longer posts.
+Keep each reply/thread item under 280 characters too.
+```
+
+Why:
+
+```text
+The campaign should feel native to X, easy to repost, and readable without opening a long-form post.
+```
+
 ## Handle and Hashtag Strategy
 
 Mention candidates, verified before planning:
@@ -200,13 +224,13 @@ Make people understand the problem in 10 seconds.
 Main post:
 
 ```text
-AI-generated media is making user-submitted photos harder to trust.
+AI-generated media makes uploaded photos harder to trust.
 
-But detecting AI after upload is the wrong primitive.
+Argus takes a source-side approach: verify the required in-app native capture path before showing a Verified Capture badge.
 
-Argus verifies the required capture path inside the partner app's native camera flow.
+Not an AI detector. Capture provenance infrastructure.
 
-Verify the capture path before showing a Verified Capture badge.
+#CaptureProvenance #Solana
 ```
 
 Optional reply:
@@ -255,14 +279,11 @@ Main post:
 ```text
 Argus is not another camera app.
 
-It is a Verified Capture SDK for platforms that depend on user-submitted photo evidence:
-
-marketplace listings as one case study
-insurance claims
-returns, warranty disputes, and compliance
-real estate, rentals, newsroom, and field inspection
+It is a Verified Capture SDK for platforms that depend on user-submitted photo evidence: listings, claims, returns, rentals, audits, and inspections.
 
 Embedded where the photo is already being submitted.
+
+#TrustInfrastructure
 ```
 
 Optional thread:
@@ -312,23 +333,25 @@ Show technical seriousness without claiming the demo is finished too early.
 Main post:
 
 ```text
-Argus uses a layered architecture:
+Argus architecture:
 
-React Native SDK for partner apps
-Kotlin Android module for native capture + device evidence
-Rust core for deterministic proof construction
-Relayer for full proof-bundle validation and sponsored registration
-Argus Registry on Solana for authorized public proof commitments
-Verifier for platforms and buyers
+RN SDK -> Kotlin native Android capture -> device evidence -> Rust proof core -> relayer validation + sponsored registration -> Argus Registry on Solana -> verifier
+
+Verify the capture path before showing a badge.
+
+#AndroidDev #RustLang #Solana
 ```
 
 Optional registration/build-log reply:
 
 ```text
-Frontier registration is the operational checkpoint.
+Build checkpoint:
 
-The build target is simple:
-native capture -> build the proof bundle -> relayer validates and sponsors Argus Registry registration -> verifier checks the bundle and active record.
+native capture -> proof bundle -> relayer validation -> sponsored registry registration -> verifier check
+
+That is the path we want judges to understand.
+
+Solana is the public commitment layer, not the photo store.
 ```
 
 Visual:
@@ -366,14 +389,16 @@ Turn the architecture into a concrete user story.
 Main post:
 
 ```text
-Demo flow we are building:
+Demo flow:
 
-1. User takes required evidence photo inside a partner app
-2. Argus creates a capture proof
-3. Platform reviewer, buyer, claims handler, or auditor sees Verified Capture status
-4. Public verifier shows the authorized Argus Registry record and evidence summary
+1. User captures evidence inside a partner app
+2. Argus creates a proof bundle
+3. Relayer validates + sponsors registration
+4. Verifier shows status, registry record, and limits
 
-Goal: reduce imported, reused, manipulated, and AI-generated photo-evidence risk.
+Reducing imported/reused/AI photo risk.
+
+#VerifiedCapture #Solana
 ```
 
 Optional build-log reply:
@@ -424,11 +449,11 @@ Important boundary:
 
 Argus verifies the required capture path, not scene truth.
 
-It can verify that a submitted photo came through an Argus-controlled native Android capture flow, was bound to device-side evidence, and has authorized registry commitments.
+It can show that a photo came through an Argus-controlled native Android flow and authorized registry commitment.
 
-It does not prove the physical scene was not staged.
+It does not prove the scene was not staged.
 
-That distinction is the product.
+#CaptureProvenance #Security
 ```
 
 Optional second post:

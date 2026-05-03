@@ -22,53 +22,7 @@ Partner app listing workflow
 
 Use this as the single diagram for the technical overview deck and video. The key reading order is left-to-right across trust boundaries: frontend, Android native module, proof rules, backend/relayer/storage, Solana on-chain commitments, then verifier/platform action.
 
-```mermaid
-flowchart LR
-  subgraph FE[Frontend / partner product]
-    A0[Listing details + required capture policy]
-    A[Partner React Native App]
-    B[Argus RN SDK]
-    A0 --> A --> B
-  end
-
-  subgraph AN[Android Native module]
-    C[CameraX capture]
-    C1[Cache path, file identity, byte checks]
-    C2[Motion, app identity, nonce]
-    C3[Keystore signature / attestation material]
-    C --> C1 --> C2 --> C3
-  end
-
-  subgraph PR[Proof rules]
-    D[Kotlin proof bridge / Rust core rules]
-    J[Exact photo hash, manifest hash, proof ID]
-    D --> J
-  end
-
-  subgraph BE[Backend / relayer / storage]
-    E[Authorized relayer policy gate]
-    P[Proof bundle store]
-    V[Verifier API]
-    E --> P --> V
-  end
-
-  subgraph OC[On-chain / Solana]
-    F[Argus Registry commitments only]
-  end
-
-  subgraph ACT[Verification / platform action]
-    G[Verifier recomputation]
-    H[Badge, retake, downgrade, reject, or review]
-    G --> H
-  end
-
-  B --> C
-  C3 --> D
-  J --> E
-  E --> F
-  F --> G
-  P --> G
-```
+![Argus architecture picture](../images/Architecture%20Picture.png)
 
 Pitch rule for this diagram: the relayer is the pre-registration gatekeeper; Solana is the external commitment layer; the verifier recomputes the bundle and explains limits before the platform grants status.
 
