@@ -4,6 +4,15 @@
 
 Argus is a React Native SDK and Solana registry prototype that turns in-app photo capture into a verifiable receipt. Instead of trusting a raw upload after the fact, a partner app can require an Argus capture path, bind the exact photo bytes to Android-side evidence and relayer policy, and anchor the accepted commitment in an authorized Solana registry record.
 
+## Links
+
+- Project: <https://argus-sdk.netlify.app>
+- GitHub: <https://github.com/dotcom07/ARGUS>
+- X: <https://x.com/ArgusSDK>
+- ARGUS IR Presentation: <https://www.youtube.com/watch?v=UEfED6PzNnQ>
+- ARGUS Technical Overview: <https://www.youtube.com/watch?v=wsV19PRAqp8>
+- Argus Demo: <https://www.youtube.com/shorts/weYYy4CS_HQ>
+
 ## How It Works
 
 <img src="./images/Argus_Tech/Technical%2002/Architecture%20Picture.png" alt="Argus architecture zones" width="900">
@@ -133,10 +142,12 @@ This is not a fully trustless client-side verifier. The demo backend is the retr
 
 | Level | Meaning |
 | --- | --- |
-| Level 1 | Demo or local bundle check only |
-| Level 2 | Native Android capture evidence plus full registry/relayer trust root |
-| Level 3 | Level 2 plus validated Android Keystore signature binding |
-| Level 4 | Level 3 plus Android Key Attestation root validation |
+| Level 1 | Demo or local bundle check only. Hashes and commitments may recompute, but there is no production relayer, registry, or verifier trust root. |
+| Level 2 | Production Verified Capture: native Android CameraX capture, file/byte binding, app identity, motion evidence, session nonce, relayer validation, sponsored registration, and active Argus Registry commitment all match. |
+| Level 3 | Level 2 plus Android Keystore-signed proof binding. A non-exported app/device private key signs the proof manifest or binding message, and the verifier validates the signature, public key, and session binding. |
+| Level 4 | Level 3 plus Android Key Attestation. The verifier validates the attestation certificate chain, server challenge, leaf public-key binding, security level, and trusted root/fingerprint to confirm the key is protected by TEE or StrongBox when supported. |
+
+Android Keystore is the API and key-management system; a Keystore key can be software-backed or hardware-backed. Argus treats a validated Keystore signature as Level 3. It only promotes to Level 4 when verifier policy can prove that the signing key is hardware-backed through Android Key Attestation, typically TEE or StrongBox. Level 4 strengthens device/key trust, but it is still not a camera-sensor signature and does not prove physical scene truth.
 
 ## Setup
 
