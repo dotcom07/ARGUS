@@ -7,6 +7,8 @@ const SUPPORTED_KEYSTORE_SIGNATURE_ALGORITHMS = new Set([
 ]);
 const MAX_SIGNATURE_BYTES = 2048;
 const ANDROID_ATTESTATION_ROOT_SHA256_ENV = "ARGUS_ANDROID_ATTESTATION_ROOT_SHA256";
+const ANDROID_ATTESTATION_REVOKED_CERT_SHA256_ENV = "ARGUS_ANDROID_ATTESTATION_REVOKED_CERT_SHA256";
+const ANDROID_ATTESTATION_REVOKED_SERIALS_ENV = "ARGUS_ANDROID_ATTESTATION_REVOKED_SERIALS";
 const ANDROID_KEY_ATTESTATION_EXTENSION_OID = "1.3.6.1.4.1.11129.2.1.17";
 const ANDROID_LEVEL_4_MATERIAL_PENDING_RELAY_VALIDATION =
   "level_4_material_present_pending_relayer_root_validation";
@@ -18,7 +20,7 @@ const ANDROID_SECURITY_LEVEL_NAMES = new Map([
   [ANDROID_SECURITY_LEVEL_STRONGBOX, "strongbox"],
 ]);
 
-export function validateAndroidEvidenceLevel({ deviceIntegrity, manifest, request }) {
+export function validateAndroidEvidenceLevel({ deviceIntegrity, manifest, request, playIntegrityDecision }) {
   const level = deviceIntegrity.androidEvidenceLevel;
   if (level === undefined) {
     return {
@@ -33,10 +35,15 @@ export function validateAndroidEvidenceLevel({ deviceIntegrity, manifest, reques
 
   const fallback = validateHardwareFallback(deviceIntegrity, level);
   if (level === 2) {
+    if (isProductionRegistrationRuntime()) {
+      throw new Error("Production Verified Capture requires Level 3 or Level 4 Android evidence; Level 2 is demo-only");
+    }
     return {
       acceptedLevel: 2,
       evidenceLevel: "level_2_native_capture",
       fallbackReason: fallback?.reason,
+      verifiedCaptureEligible: false,
+      playIntegrity: playIntegrityDecision,
     };
   }
 
@@ -48,6 +55,7 @@ export function validateAndroidEvidenceLevel({ deviceIntegrity, manifest, reques
       request,
     }),
     buildAndroidKeystoreCanonicalBindingJson({
+      deviceIntegrity,
       manifest,
       request,
     }),
@@ -73,6 +81,7 @@ export function validateAndroidEvidenceLevel({ deviceIntegrity, manifest, reques
       keymasterSecurityLevel: hardwareAttestation.keymasterSecurityLevel,
       trustedRootFingerprintSha256: hardwareAttestation.trustedRootFingerprintSha256,
       level4AttestationVerdict: acceptedLevel4AttestationVerdict(hardwareAttestation),
+      playIntegrity: playIntegrityDecision,
     };
   }
 
@@ -87,6 +96,7 @@ export function validateAndroidEvidenceLevel({ deviceIntegrity, manifest, reques
     evidenceLevel: "level_3_keystore_signature",
     fallbackReason: fallback?.reason,
     level4AttestationVerdict,
+    playIntegrity: playIntegrityDecision,
   };
 }
 
@@ -154,9 +164,12 @@ export function buildAndroidKeystoreSignedPayloadJson({ deviceIntegrity, manifes
   });
 }
 
-function buildAndroidKeystoreCanonicalBindingJson({ manifest, request }) {
+function buildAndroidKeystoreCanonicalBindingJson({ deviceIntegrity, manifest, request }) {
   // kr: Android native module은 self-reference를 피하기 위해 deviceIntegrityJson 대신 manifest/evidence commitment와 session tuple을 직접 서명합니다.
   // en: The Android native module avoids self-reference by signing manifest/evidence commitments and the session tuple directly.
+  const playIntegrityBinding = isNonEmptyString(deviceIntegrity?.playIntegrity?.tokenSha256)
+    ? `"playIntegrityTokenHash":${JSON.stringify(deviceIntegrity.playIntegrity.tokenSha256)},`
+    : "";
   return [
     "{",
     "\"schema\":\"argus.keystore.binding.v1\",",
@@ -168,6 +181,7 @@ function buildAndroidKeystoreCanonicalBindingJson({ manifest, request }) {
     `"captureSessionId":${JSON.stringify(request.captureSessionId)},`,
     `"sessionNonce":${JSON.stringify(request.sessionNonce)},`,
     `"capturedAtMs":${manifest.captured_at_ms},`,
+    playIntegrityBinding,
     `"imageHash":${JSON.stringify(request.imageHash)}`,
     "}",
   ].join("");
@@ -332,6 +346,8 @@ function validateHardwareAttestationCertificateChain(certificateChainPem, public
 
   validateCertificateChainSignatures(certificates);
 
+  validateAndroidAttestationRevocation(certificates);
+
   const trustedRootFingerprints = configuredAndroidAttestationRootFingerprints();
   if (trustedRootFingerprints.size === 0) {
     throw new Error("Level 4 Android evidence requires configured Android attestation trust root");
@@ -340,14 +356,48 @@ function validateHardwareAttestationCertificateChain(certificateChainPem, public
     throw new Error("Level 4 Android attestation root is not trusted");
   }
 
+  // Android guidance says the first extension nearest the root is authoritative; it may not be the leaf.
+  const attestationCertificate = findFirstAndroidAttestationCertificateFromRoot(certificates);
   const attestationExtension = validateAndroidKeyAttestationExtension(
-    leafCertificate.raw,
+    attestationCertificate.raw,
     expectedChallengeHex,
   );
   return {
     ...attestationExtension,
     trustedRootFingerprintSha256: sha256Hex(rootCertificate.raw),
   };
+}
+
+function findFirstAndroidAttestationCertificateFromRoot(certificates) {
+  let selected = null;
+  for (let index = certificates.length - 1; index >= 0; index -= 1) {
+    const extension = findX509Extension(
+      certificates[index].raw,
+      ANDROID_KEY_ATTESTATION_EXTENSION_OID,
+    );
+    if (extension) {
+      selected = certificates[index];
+      break;
+    }
+  }
+
+  if (!selected) {
+    throw new Error("Level 4 Android evidence requires Android key attestation certificate extension");
+  }
+
+  return selected;
+}
+
+function validateAndroidAttestationRevocation(certificates) {
+  const revokedFingerprints = configuredRevokedCertificateFingerprints();
+  const revokedSerials = configuredRevokedCertificateSerials();
+  for (const certificate of certificates) {
+    const fingerprint = sha256Hex(certificate.raw);
+    const serial = certificate.serialNumber.toLowerCase().replace(/^0+/, "") || "0";
+    if (revokedFingerprints.has(fingerprint) || revokedSerials.has(serial)) {
+      throw new Error("Android attestation certificate is revoked by relayer policy");
+    }
+  }
 }
 
 function validateCertificateChainSignatures(certificates) {
@@ -377,6 +427,37 @@ function configuredAndroidAttestationRootFingerprints() {
   }
 
   return new Set(fingerprints);
+}
+
+function configuredRevokedCertificateFingerprints() {
+  return configuredHexSet(
+    ANDROID_ATTESTATION_REVOKED_CERT_SHA256_ENV,
+    "SHA-256 certificate fingerprints",
+  );
+}
+
+function configuredRevokedCertificateSerials() {
+  const rawValue = process.env[ANDROID_ATTESTATION_REVOKED_SERIALS_ENV] ?? "";
+  const serials = rawValue
+    .split(/[,:\s]+/)
+    .map((entry) => entry.trim().toLowerCase().replace(/^0+/, ""))
+    .filter(Boolean);
+  if (serials.some((serial) => !/^[0-9a-f]+$/.test(serial))) {
+    throw new Error(`${ANDROID_ATTESTATION_REVOKED_SERIALS_ENV} must contain hexadecimal certificate serials`);
+  }
+  return new Set(serials);
+}
+
+function configuredHexSet(environmentName, description) {
+  const rawValue = process.env[environmentName] ?? "";
+  const values = rawValue
+    .split(/[,\s]+/)
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+  if (values.some((value) => !/^[0-9a-f]{64}$/.test(value))) {
+    throw new Error(`${environmentName} must contain ${description}`);
+  }
+  return new Set(values);
 }
 
 function validateAndroidKeyAttestationExtension(certificateDer, expectedChallengeHex) {
@@ -697,6 +778,14 @@ function normalizePemBlock(value) {
 
 function sha256Hex(value) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function isProductionRuntime() {
+  return process.env.NODE_ENV?.trim().toLowerCase() === "production";
+}
+
+function isProductionRegistrationRuntime() {
+  return isProductionRuntime() && process.env.ARGUS_RELAYER_MODE === "solana";
 }
 
 export const __androidEvidencePolicyTestHooks = Object.freeze({

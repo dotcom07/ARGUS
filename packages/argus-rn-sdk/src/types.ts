@@ -31,6 +31,14 @@ export type ArgusDeviceEvidenceSummary = {
   hardwareSecurityClass?: string;
   attestationSecurityLevel?: string;
   keymasterSecurityLevel?: string;
+  verifiedCaptureEligible?: boolean;
+  playIntegrity?: {
+    present?: boolean;
+    verified?: boolean;
+    required?: boolean;
+    provider?: string;
+    tokenSha256?: string;
+  };
 };
 
 export type ArgusProofRecord = {
@@ -81,19 +89,24 @@ export type ArgusConfig = {
   partnerId: string;
   relayerUrl: string;
   verifierBaseUrl: string;
+  relayerAuthToken?: string;
 };
 
 export type ArgusCaptureSession = {
   captureSessionId: string;
   nonce: string;
   appIdentityHash: string;
+  issuedAtMs?: number;
   expiresAtMs?: number;
+  captureWindowStartMs?: number;
+  captureWindowEndMs?: number;
 };
 
 export type CreateCaptureProofOptions = {
   partnerId: string;
   useCase: ArgusUseCase;
   metadata: Record<string, string | number | boolean | null>;
+  playIntegrityToken?: string;
 };
 
 export type VerificationResult = {

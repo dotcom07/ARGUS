@@ -72,9 +72,9 @@ Evidence levels are verifier policy labels, not truth scores.
 | Level | Security claim |
 | --- | --- |
 | **Level 1 - Demo / bundle check** | Local, browser, simulator, or other preview flow where photo, manifest, and evidence commitments may recompute, but there is no production badge or production registry trust root. |
-| **Level 2 - Verified Capture (`app_capture`)** | Current production claim when native Android capture evidence, required device/app/motion commitments, nonce/session binding, exact byte/manifest/evidence commitments, production registry/configuration, authorized relayer fee payer, and sponsored gas/fee-payer binding all verify. |
-| **Level 3 - Keystore-signed binding** | Level 2 plus an Android Keystore signature over the proof manifest or binding message. The verifier must validate the signature and signer public key against expected partner/app policy before displaying Level 3. |
-| **Level 4 - Hardware-backed key attestation** | Level 3 plus Android Key Attestation certificate-chain validation, leaf public-key binding, extension-bound session nonce challenge, TEE/StrongBox security level, and configured trusted attestation root/fingerprint. Unsupported, unverifiable, unconfigured-root, or root-unvalidated Level 4 falls back to Level 3 or Level 2. |
+| **Level 2 - Native capture evidence** | Native Android capture evidence and file-swap guards may verify, but Level 2 is demo/non-production evidence and is never eligible for a production Verified Capture badge because it has no verifier-checkable private-key signature. |
+| **Level 3 - Keystore-signed binding** | Production evidence begins here: Level 2 plus an Android Keystore signature over the proof manifest or binding message. The verifier must validate the signature and signer public key against expected partner/app policy before displaying production Verified Capture. |
+| **Level 4 - Hardware-backed key attestation** | Level 3 plus Android Key Attestation certificate-chain validation, leaf public-key binding, extension-bound session nonce challenge, TEE/StrongBox security level, and configured trusted attestation root/fingerprint. Unsupported or unverifiable Level 4 falls back to Level 3; it never falls back to a production Level 2 badge. |
 
 Level 3 and Level 4 bind app/device key evidence to the proof policy. They are not camera sensor signatures.
 

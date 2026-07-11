@@ -37,6 +37,14 @@ yarn-debug.log*
 yarn-error.log*
 .argus-relayer-data/
 
+# ESP-IDF generates local configuration and managed dependency sources.
+hardware/xiao-secure-capture/firmware/managed_components/
+hardware/xiao-secure-capture/firmware/build*/
+hardware/xiao-secure-capture/firmware/sdkconfig
+hardware/xiao-secure-capture/firmware/sdkconfig.old
+__pycache__/
+eim_config.toml
+
 agents
 rule_and_track
 docs

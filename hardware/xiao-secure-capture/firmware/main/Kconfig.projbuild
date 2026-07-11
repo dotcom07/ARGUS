@@ -1,0 +1,61 @@
+menu "Argus XIAO secure capture"
+
+config ARGUS_WIFI_ENABLED
+    bool "Enable Wi-Fi station and backend upload"
+    default n
+    help
+        Connect to the configured 2.4 GHz station and upload exact JPEG bytes
+        plus the MCU receipt. Keep disabled until credentials and endpoint are set.
+
+config ARGUS_DS_PRODUCTION
+    bool "Use ESP32-S3 RSA Digital Signature peripheral"
+    default n
+    help
+        Requires a provisioned HMAC eFuse and encrypted RSA-DS data in NVS.
+        Keep disabled until the device identity and recovery procedure are tested.
+
+config ARGUS_DS_HMAC_KEY_SLOT
+    int "RSA-DS HMAC key slot"
+    range 0 5
+    default 0
+
+config ARGUS_WIFI_SSID
+    string "Wi-Fi SSID"
+    default ""
+
+config ARGUS_WIFI_PASSWORD
+    string "Wi-Fi password"
+    default ""
+
+config ARGUS_API_AUTH_TOKEN
+    string "Backend API bearer token"
+    default ""
+
+config ARGUS_ALLOW_INSECURE_HTTP
+    bool "Allow plain HTTP for local development"
+    default n
+    help
+        Development-only escape hatch for a local HTTP relayer. Keep disabled
+        for production; HTTPS uses the ESP x509 certificate bundle.
+
+config ARGUS_BACKEND_URL
+    string "Receipt backend URL"
+    default ""
+
+config ARGUS_PARTNER_ID
+    string "Backend partner identifier"
+    default "recommerce-demo"
+
+config ARGUS_USE_CASE
+    string "Backend use case"
+    default "marketplace_listing"
+
+config ARGUS_APP_IDENTITY_HASH
+    string "Backend app identity hash"
+    default "c5f00555103b31cc35ccbd6119db30b93d1a8244302361acca205c01ff7d247e"
+
+config ARGUS_DEVICE_ID
+    string "Capture device identifier"
+    default "xiao-esp32s3-sense-dev"
+
+endmenu

@@ -18,6 +18,7 @@ import { assertPhotoBytesBase64TextLimit, decodeCanonicalPhotoBytes } from "./ph
 import { assertRegistrationJsonTextLimits } from "./requestTextPolicy.mjs";
 import { recordRegistrationProgress } from "./registrationProgress.mjs";
 import { validateAndConsumeCaptureSession } from "./sessionStore.mjs";
+import { verifyPlayIntegrityForRequest } from "./playIntegrityPolicy.mjs";
 
 loadEnv();
 
@@ -36,6 +37,9 @@ const SIGNATURE_CONFIRM_TIMEOUT_MS = 90_000;
 // en: submitRegisterProof submits the Anchor register_proof instruction directly to devnet/localnet.
 export async function submitRegisterProof(request) {
   const normalizedRequest = normalizeSubmitRegisterProofRequest(request);
+  // Fail fast on a missing production signer configuration before any evidence
+  // validation or session work. This is an operator prerequisite, not capture data.
+  assertAuthorizedRelayerSignerConfigured();
   // kr: registry trust root는 session 소비 전에 고정합니다. production config가 틀리면 nonce를 태우지 않고 실패합니다.
   // en: Pin the registry trust root before consuming the session, so bad production config fails without burning the nonce.
   const programId = resolveRegistryProgramId();
@@ -43,7 +47,7 @@ export async function submitRegisterProof(request) {
   // kr: RPC/keypair/signature 전제 조건 실패는 operator 설정 문제라서 capture를 다시 요구하지 않도록 retry 가능하게 둡니다.
   // en: The submitter revalidates the proof bundle first; manifest/evidence/photo validation failures consume the open session to block replay.
   // en: RPC/keypair/signature prerequisite failures stay retryable because they are operator setup issues, not capture defects.
-  const registration = validateSubmitRegisterProofRequest(normalizedRequest, {
+  const registration = await validateSubmitRegisterProofRequest(normalizedRequest, {
     consumeSession: false,
     consumeSessionOnValidationFailure: true,
   });
@@ -264,6 +268,12 @@ function assertAuthorizedRelayerSigner(relayerPublicKey) {
   }
 }
 
+function assertAuthorizedRelayerSignerConfigured() {
+  if (isProductionRuntime() && !process.env.ARGUS_AUTHORIZED_RELAYER_PUBLIC_KEY) {
+    throw new Error("ARGUS_AUTHORIZED_RELAYER_PUBLIC_KEY is required in production");
+  }
+}
+
 function resolveRegistryProgramId() {
   const configuredProgramId =
     process.env.ARGUS_REGISTRY_PROGRAM_ID || TRUSTED_REGISTRY_PROGRAM_ID;
@@ -341,9 +351,9 @@ function mapProofLevel(proofLevel) {
   throw new Error("proofLevel is not supported by the registry submitter");
 }
 
-function validateSubmitRegisterProofRequest(
+async function validateSubmitRegisterProofRequest(
   request,
-  { consumeSession = true, consumeSessionOnValidationFailure = false } = {},
+  { consumeSession = true, consumeSessionOnValidationFailure = false, playIntegrityDecision } = {},
 ) {
   if (!request || typeof request !== "object") {
     throw new Error("register proof request is required");
@@ -363,6 +373,7 @@ function validateSubmitRegisterProofRequest(
     "photoBytesBase64",
     "captureSessionId",
     "sessionNonce",
+    "captureTimestamp",
     "appIdentityHash",
     "proofLevel",
   ]) {
@@ -412,12 +423,14 @@ function validateSubmitRegisterProofRequest(
   if (calculatedPartnerIdHash !== request.partnerIdHash) {
     throw new Error("partnerIdHash does not match partnerId");
   }
-
   if (consumeSession) {
     consumeRegistrationSession(request);
   }
 
+  let resolvedPlayIntegrityDecision = playIntegrityDecision;
   try {
+    resolvedPlayIntegrityDecision =
+      playIntegrityDecision ?? (await verifyPlayIntegrityForRequest(request));
     const manifest = parseCanonicalManifest(request.canonicalManifestJson);
     if (canonicalManifestStringify(manifest) !== request.canonicalManifestJson) {
       throw new Error("canonicalManifestJson is not a canonical Argus manifest");
@@ -428,7 +441,9 @@ function validateSubmitRegisterProofRequest(
       throw new Error("manifestHash does not match canonicalManifestJson");
     }
 
-    validateManifestPolicy(request, manifest, calculatedManifestHash);
+    validateManifestPolicy(request, manifest, calculatedManifestHash, {
+      playIntegrityDecision: resolvedPlayIntegrityDecision,
+    });
 
     return {
       proofId: request.proofId,
@@ -460,7 +475,7 @@ function parseCanonicalManifest(value) {
   }
 }
 
-function validateManifestPolicy(request, manifest, manifestHash) {
+function validateManifestPolicy(request, manifest, manifestHash, { playIntegrityDecision } = {}) {
   if (manifest.schema_version !== MANIFEST_SCHEMA_VERSION) {
     throw new Error("manifest schema_version is not supported");
   }
@@ -525,7 +540,7 @@ function validateManifestPolicy(request, manifest, manifestHash) {
     request.deviceIntegrityJson,
     manifest.device_integrity_commitment,
   );
-  enforceProofLevelPolicy(request, manifest);
+  enforceProofLevelPolicy(request, manifest, { playIntegrityDecision });
 }
 
 function assertCaptureTimestampNotAfterRelayerClock(capturedAtMs, nowMs = Date.now()) {
@@ -543,6 +558,7 @@ function consumeRegistrationSession(request) {
     nonce: request.sessionNonce,
     partnerId: request.partnerId,
     useCase: request.useCase,
+    captureTimestamp: request.captureTimestamp,
   });
 }
 
@@ -570,7 +586,7 @@ function assertEvidenceCommitment(field, value, expectedHash) {
   assertCanonicalJson(field, value);
 }
 
-function enforceProofLevelPolicy(request, manifest) {
+function enforceProofLevelPolicy(request, manifest, { playIntegrityDecision } = {}) {
   const cameraEvidence = parseEvidenceJson("cameraEvidenceJson", request.cameraEvidenceJson);
   const deviceIntegrity = parseEvidenceJson("deviceIntegrityJson", request.deviceIntegrityJson);
 
@@ -621,7 +637,7 @@ function enforceProofLevelPolicy(request, manifest) {
     manifest.captured_at_ms,
     request.deviceIntegrityJson,
   );
-  validateAndroidEvidenceLevel({ deviceIntegrity, manifest, request });
+  validateAndroidEvidenceLevel({ deviceIntegrity, manifest, request, playIntegrityDecision });
 }
 
 function validateCapturedFileBytes(cameraEvidence, cameraEvidenceJson, photoBytesBase64, imageHash) {

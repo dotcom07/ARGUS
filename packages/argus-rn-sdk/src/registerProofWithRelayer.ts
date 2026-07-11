@@ -55,8 +55,10 @@ export async function registerProofWithRelayer(
       captureSessionId: proofSnapshot.captureSessionId,
       sessionNonce: proofSnapshot.nonce,
       appIdentityHash: proofSnapshot.appIdentityHash,
+      captureTimestamp: getManifestCaptureTimestamp(proofSnapshot),
       proofLevel: proofSnapshot.proofLevel ?? proofSnapshot.integrityLevel,
     }),
+    config.relayerAuthToken,
   );
 
   if (!response.ok) {
@@ -111,7 +113,11 @@ function sanitizeRelayerErrorDetail(value: string): string {
   return value.replace(/[\u0000-\u001f\u007f]+/g, " ").trim().slice(0, 240);
 }
 
-async function postRegistrationWithRetry(registerProofUrl: string, body: string): Promise<Response> {
+async function postRegistrationWithRetry(
+  registerProofUrl: string,
+  body: string,
+  relayerAuthToken?: string,
+): Promise<Response> {
   let lastError: unknown;
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -120,6 +126,9 @@ async function postRegistrationWithRetry(registerProofUrl: string, body: string)
         method: "POST",
         headers: {
           "content-type": "application/json",
+          ...(relayerAuthToken
+            ? { authorization: `Bearer ${relayerAuthToken}` }
+            : {}),
         },
         body,
       });
@@ -253,7 +262,44 @@ function assertProofAllowedForProductionRegistration(proof: ArgusProof) {
     throw new Error("Argus native proof is missing required app_capture evidence or session fields");
   }
 
+  // Development/simulator clients may submit Level 2 evidence for diagnostics;
+  // the production relayer still rejects it and the proof status remains non-verified.
+  if (isProductionRuntime() && !hasProductionVerifiedEvidence(proof)) {
+    throw new Error("Argus Level 2 native capture evidence is not eligible for production Verified Capture");
+  }
+
   return proofLevel;
+}
+
+function isProductionRuntime(): boolean {
+  const runtimeProcess = (globalThis as {
+    process?: { env?: { NODE_ENV?: string } };
+  }).process;
+  return runtimeProcess?.env?.NODE_ENV?.trim().toLowerCase() === "production";
+}
+
+function hasProductionVerifiedEvidence(proof: ArgusProof): boolean {
+  const summary = proof.deviceEvidenceSummary;
+  const deviceIntegrity = parseObjectJson(proof.deviceIntegrityJson);
+  return (
+    (summary?.level3KeystoreSignature === true || summary?.level4HardwareAttestation === true) &&
+    (deviceIntegrity?.androidEvidenceLevel === 3 || deviceIntegrity?.androidEvidenceLevel === 4)
+  );
+}
+
+function parseObjectJson(value?: string): Record<string, unknown> | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function buildProductionCaptureDiagnostics(proof: ArgusProof) {

@@ -19,7 +19,9 @@
     "devnet:init": "node scripts/argus-devnet.mjs init",
     "relayer:clear-data": "node scripts/clear-relayer-data.mjs",
     "relayer:server": "node api/relayer/server.mjs",
-    "test": "node scripts/verify-demo.mjs && node api/relayer/registerProof.security.test.mjs && node api/relayer/submitRegisterProof.security.test.mjs && node packages/argus-rn-sdk/src/demoProof.security.test.mjs && node packages/argus-rn-sdk/src/registerProofWithRelayer.security.test.mjs && cargo test --manifest-path crates/argus-core/Cargo.toml && cargo test --manifest-path programs/argus-registry/Cargo.toml && node --check apps/marketplace-demo/index.js && node scripts/register-proof.mjs"
+    "anchor:smoke": "node scripts/anchor-smoke.mjs",
+    "mcu:smoke": "node scripts/mcu-http-smoke.mjs",
+    "test": "node scripts/verify-demo.mjs && node api/relayer/security-boundaries.test.mjs && node api/relayer/mcuCapture.security.test.mjs && node api/relayer/registerProof.security.test.mjs && node api/relayer/submitRegisterProof.security.test.mjs && node packages/argus-rn-sdk/src/demoProof.security.test.mjs && node packages/argus-rn-sdk/src/registerProofWithRelayer.security.test.mjs && cargo test --manifest-path crates/argus-core/Cargo.toml && cargo test --manifest-path programs/argus-registry/Cargo.toml && node --check apps/marketplace-demo/index.js && node scripts/register-proof.mjs"
   },
   "dependencies": {
     "@argus/rn-sdk": "file:packages/argus-rn-sdk",

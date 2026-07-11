@@ -20,6 +20,7 @@ export function openRelayerCaptureSession(request) {
     useCase: request.useCase,
   });
 
+  // The authenticated API boundary is enforced by server.mjs. This function stays pure so tests and internal callers share the same policy.
   return openCaptureSession({
     appIdentityHash,
     partnerId: request.partnerId,

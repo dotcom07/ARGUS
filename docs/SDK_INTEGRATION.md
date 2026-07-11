@@ -40,6 +40,8 @@ configure({
 });
 ```
 
+`relayerAuthToken` may be used as a partner API access gate, but a token embedded in a mobile app is not a device secret. Do not treat it as proof of app identity; production device evidence still requires the Android Keystore/attestation policy and any configured Play Integrity policy.
+
 ```tsx
 <ArgusCamera
   partnerId="recommerce-demo"
@@ -80,9 +82,9 @@ Treat `proofLevel` and `integrityLevel` as verifier policy labels, not truth sco
 | Level | Integration rule |
 | --- | --- |
 | **Level 1 - Demo / bundle check** | Preview-only flow. Matching local hashes, local records, or demo transaction references do not earn the production badge. |
-| **Level 2 - Verified Capture (`app_capture`)** | Current production path when native Android capture evidence, byte/manifest/evidence commitments, nonce/session binding, production registry/configuration, authorized relayer fee payer, sponsored gas, and partner/use-case/app identity policy all verify. |
-| **Level 3 - Keystore-signed binding** | Level 2 plus a verifier-validated Android Keystore signature over the proof manifest or binding message, with signer public key validation against partner/app policy. A bare boolean or unvalidated key must not be mapped to Level 3. |
-| **Level 4 - Hardware-backed key attestation** | Level 3 plus verifier-validated Android Key Attestation certificate chain, leaf public-key binding, extension-bound session nonce challenge, TEE/StrongBox security level, and configured trusted attestation root/fingerprint. Unsupported or unverifiable attestation falls back to Level 3 or Level 2. |
+| **Level 2 - Native capture evidence** | Demo/non-production native capture evidence. It may support retake or diagnostic UX, but it is never eligible for a production Verified Capture badge. |
+| **Level 3 - Keystore-signed binding** | Production path: Level 2 plus a verifier-validated Android Keystore signature over the proof manifest or binding message, with signer public key validation against partner/app policy. A bare boolean or unvalidated key must not be mapped to Level 3. |
+| **Level 4 - Hardware-backed key attestation** | Level 3 plus verifier-validated Android Key Attestation certificate chain, leaf public-key binding, extension-bound session nonce challenge, TEE/StrongBox security level, and configured trusted attestation root/fingerprint. Unsupported or unverifiable attestation falls back to Level 3, never Level 2 for production. |
 
 Level 3 and Level 4 are app/device key evidence. They are not camera sensor signatures and do not prove that the physical scene is true.
 
