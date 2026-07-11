@@ -48,6 +48,7 @@ class ArgusEvidenceCollector(private val context: Context) {
         motionSnapshot: Map<String, Any> = collectMotionSnapshot(),
         keystoreEvidence: Map<String, Any> = levelTwoKeystoreFallback("keystore_evidence_not_requested"),
         appIdentityHash: String = collectAppIdentityHash(),
+        playIntegrityToken: String? = null,
     ): Map<String, Any> {
         // kr: native helper가 local-only signature를 만들 수 있어도, relayer/verifier가 검증할 payload/public key shape가 아니면 Level 2로 낮춥니다.
         // en: Even if the native helper made a local-only signature, downgrade to Level 2 unless it has the payload/public-key shape the relayer/verifier can check.
@@ -109,7 +110,7 @@ class ArgusEvidenceCollector(private val context: Context) {
         }
         val keystoreSignatureEvidence: Any = if (level3VerifierEvidence) keystoreEvidence else false
 
-        return mapOf(
+        val evidence = mutableMapOf<String, Any>(
             "androidEvidenceLevel" to resolvedLevel,
             "attestationCertificateChainBase64" to attestationChainBase64,
             "attestationCertificateChainPem" to attestationChainPem,
@@ -137,6 +138,16 @@ class ArgusEvidenceCollector(private val context: Context) {
             "appIdentityHashPresent" to (appIdentityHash != "unavailable"),
             "androidSdk" to Build.VERSION.SDK_INT,
         )
+
+        if (!playIntegrityToken.isNullOrBlank()) {
+            evidence["playIntegrity"] = mapOf(
+                "token" to playIntegrityToken,
+                "tokenSha256" to ArgusKeystoreEvidence.sha256HexForBinding(playIntegrityToken),
+                "binding" to "capture_session_nonce",
+            )
+        }
+
+        return evidence
     }
 
     // kr: collectAppIdentityHash는 relayer 세션과 proof manifest가 같은 앱 서명 digest를 쓰게 합니다.

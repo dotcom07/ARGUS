@@ -110,7 +110,7 @@ partner/use-case/app identity policy -> relayer policy config or DB
 commitments -> Argus Registry on Solana
 ```
 
-Current hackathon code uses file-backed demo proof-bundle storage under `.argus-relayer-data/proofs` for the HTTP relayer, browser `localStorage` for the static preview, and an in-memory relayer session map. Production should replace those with durable proof-bundle storage, durable nonce/session/audit storage, partner authentication and rate limiting, and relayer key rotation/operations.
+Current hackathon code uses file-backed demo proof-bundle storage under `.argus-relayer-data/proofs` for the HTTP relayer, browser `localStorage` for the static preview, and a file-backed relayer session store with atomic consume under `.argus-relayer-data/capture-sessions.json`. The session store is durable for a single host and protects replay across process restarts; a multi-node production deployment should replace it with a database conditional update or an equivalent distributed atomic primitive. Partner authentication, rate limiting, durable audit logs, and relayer key rotation/operations remain production requirements.
 
 Pitch rule: emphasize Solana as the public commitment layer for accepted Argus verifier bundles. Do not claim Solana directly proves camera origin, scene truth, or Android evidence authenticity.
 

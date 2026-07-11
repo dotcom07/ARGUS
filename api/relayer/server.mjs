@@ -4,6 +4,8 @@ import { openRelayerCaptureSession } from "./openCaptureSession.mjs";
 import { registerProof } from "./registerProof.mjs";
 import { loadProofBundle, storeProofBundle } from "./proofBundleStore.mjs";
 import { loadRegistrationProgress, recordRegistrationProgress } from "./registrationProgress.mjs";
+import { ArgusHttpError, assertApiAuthentication, assertRateLimit } from "./requestSecurity.mjs";
+import { acceptMcuCapture } from "./mcuCapture.mjs";
 
 loadEnv();
 
@@ -24,7 +26,7 @@ const server = http.createServer(async (request, response) => {
   try {
     await routeRequest(request, response);
   } catch (error) {
-    const status = isClientError(error) ? 400 : 500;
+    const status = error?.statusCode || (isClientError(error) ? 400 : 500);
     console.error("[Argus relayer] request failed", {
       status,
       method: request.method,
@@ -32,6 +34,9 @@ const server = http.createServer(async (request, response) => {
       message: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     });
+    for (const [header, value] of Object.entries(error?.headers || {})) {
+      response.setHeader(header, value);
+    }
     sendJson(response, status, {
       error: status === 400 ? error.message : "Argus relayer request failed",
     });
@@ -59,6 +64,10 @@ async function routeRequest(request, response) {
     return;
   }
 
+  const securityRoute = routeSecurityName(request, url.pathname);
+  assertApiAuthentication(request);
+  assertRateLimit(request, securityRoute);
+
   if (request.method === "POST" && url.pathname === "/capture-session") {
     const body = await readJsonBody(request);
     console.info("[Argus relayer] capture session request received", {
@@ -69,9 +78,23 @@ async function routeRequest(request, response) {
     const session = openRelayerCaptureSession(body);
     console.info("[Argus relayer] capture session issued", {
       captureSessionId: shortValue(session.captureSessionId),
+      issuedAtMs: session.issuedAtMs,
       expiresAtMs: session.expiresAtMs,
     });
     sendJson(response, 200, session);
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/mcu/capture") {
+    const body = await readJsonBody(request);
+    const result = acceptMcuCapture(body);
+    console.info("[Argus relayer] MCU capture accepted", {
+      captureSessionId: shortValue(result.captureSessionId),
+      imageHash: shortValue(result.imageHash),
+      capturedFileBytes: result.capturedFileBytes,
+      securityLevel: result.securityLevel,
+    });
+    sendJson(response, 200, result);
     return;
   }
 
@@ -246,6 +269,7 @@ function setCorsHeaders(response) {
 
 function isClientError(error) {
   return (
+    error instanceof ArgusHttpError ||
     error instanceof SyntaxError ||
     error?.message?.includes("required") ||
     error?.message?.includes("must") ||
@@ -254,4 +278,17 @@ function isClientError(error) {
     error?.message?.includes("does not match") ||
     error?.message?.includes("exceeds")
   );
+}
+
+function routeSecurityName(request, pathname) {
+  if (request.method === "POST" && pathname === "/capture-session") {
+    return "capture-session";
+  }
+  if (request.method === "POST" && pathname === "/mcu/capture") {
+    return "mcu-capture";
+  }
+  if (request.method === "POST" && pathname === "/register-proof") {
+    return "register-proof";
+  }
+  return "proof-read";
 }

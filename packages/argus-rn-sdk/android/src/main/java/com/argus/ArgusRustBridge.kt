@@ -22,6 +22,7 @@ class ArgusRustBridge {
         sessionNonce: String?,
         capturedAtMs: Long,
         imageBytes: ByteArray,
+        playIntegrityTokenHash: String? = null,
     ): WritableMap {
         val safePartnerId = partnerId.trim().takeIf { it.isNotBlank() }
             ?: throw IllegalArgumentException("partnerId is required for app_capture")
@@ -80,6 +81,7 @@ class ArgusRustBridge {
                 sessionNonce = nonce,
                 capturedAtMs = safeCapturedAtMs,
                 imageBytes = imageBytes,
+                playIntegrityTokenHash = playIntegrityTokenHash,
             ),
         )
         val keystoreValidation = ArgusKeystoreEvidence.validateDeviceEvidence(

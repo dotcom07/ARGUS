@@ -26,6 +26,7 @@ internal object ArgusKeystoreEvidence {
         val sessionNonce: String,
         val capturedAtMs: Long,
         val imageBytes: ByteArray,
+        val playIntegrityTokenHash: String? = null,
     )
 
     data class KeystoreValidation(
@@ -62,8 +63,15 @@ internal object ArgusKeystoreEvidence {
             "\"captureSessionId\":\"${escapeJson(input.captureSessionId.trim())}\"," +
             "\"sessionNonce\":\"${escapeJson(input.sessionNonce.lowercase())}\"," +
             "\"capturedAtMs\":${input.capturedAtMs}," +
+            (input.playIntegrityTokenHash?.let {
+                "\"playIntegrityTokenHash\":\"${escapeJson(it.lowercase())}\","
+            } ?: "") +
             "\"imageHash\":\"$imageHash\"" +
             "}"
+    }
+
+    fun sha256HexForBinding(value: String): String {
+        return sha256Hex(value.toByteArray())
     }
 
     fun validateDeviceEvidence(deviceEvidenceJson: String, bindingData: String): KeystoreValidation {

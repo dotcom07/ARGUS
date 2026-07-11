@@ -187,7 +187,7 @@ try {
 }
 
 async function acceptsActiveAuthorizedAppCaptureRegistration() {
-  const proof = buildProof();
+  const proof = buildProductionProof();
   mockRelayerResponse(buildRegistration(proof));
 
   const registration = await registerProofWithRelayer(config, proof);
@@ -258,7 +258,7 @@ async function acceptsPendingLevel4MaterialForRelayerValidation() {
 }
 
 async function acceptsFiniteAndroidSensorNumberLexemes() {
-  const baseProof = buildProof();
+  const baseProof = buildProductionProof();
   const deviceIntegrityJson = baseProof.deviceIntegrityJson
     .replace("\"accelerometer\":[0.01,0.02,9.81]", "\"accelerometer\":[0.0100,0.0200,9.8100]")
     .replace("\"gyroscope\":[0.001,0.002,0.003]", "\"gyroscope\":[0.0010,0.0020,0.0030]");
@@ -1211,7 +1211,7 @@ async function rejectsVerificationUrlWithoutAuthorityFromRelayer() {
 }
 
 async function acceptsProductionVerifierBasePath() {
-  const proof = buildProof();
+  const proof = buildProductionProof();
   const verificationUrl = `https://verify.argus.dev/brand/proof/${proof.proofId}`;
   const basePathConfig = {
     ...config,
@@ -1234,7 +1234,7 @@ async function acceptsProductionVerifierBasePath() {
 }
 
 async function acceptsProductionVerifierEncodedSeparatorBasePath() {
-  const proof = buildProof();
+  const proof = buildProductionProof();
   const verificationUrl = `https://verify.argus.dev/brand%2fregion/proof/${proof.proofId}`;
   const basePathConfig = {
     ...config,
@@ -1257,7 +1257,7 @@ async function acceptsProductionVerifierEncodedSeparatorBasePath() {
 }
 
 async function acceptsLoopbackIpv6VerifierBasePath() {
-  const proof = buildProof();
+  const proof = buildProductionProof();
   const verificationUrl = `http://[::1]:8080/verifier/proof/${proof.proofId}`;
   const loopbackConfig = {
     ...config,
@@ -1295,7 +1295,7 @@ function rejectsProductionProofLinkToLoopbackWhenDefaultVerifierConfigured() {
 
 function rejectsUnsafeProofLinkUrls() {
   configure(config);
-  const proof = buildProof();
+  const proof = buildProductionProof();
   const productionProof = {
     ...proof,
     ...buildRegistration(proof),
@@ -1574,7 +1574,7 @@ function rejectsMarketplaceSimulatorPreviewAsLocalDemoLink() {
 
 async function acceptsCompleteProductionVerifiedVerifierResponse() {
   configure(config);
-  const nativeProof = buildProof();
+  const nativeProof = buildProductionProof();
   const proof = {
     ...nativeProof,
     ...buildRegistration(nativeProof),
@@ -1603,7 +1603,7 @@ async function acceptsCompleteProductionVerifiedVerifierResponse() {
 
 async function scrubsTopLevelClaimFieldsFromAcceptedVerifierResponses() {
   configure(config);
-  const nativeProof = buildProof();
+  const nativeProof = buildProductionProof();
   const proof = {
     ...nativeProof,
     ...buildRegistration(nativeProof),
@@ -1764,7 +1764,7 @@ async function requestsVerifierApiUnderConfiguredBasePath() {
     verifierBaseUrl: "http://[::1]:8080/verifier/",
   };
   configure(loopbackConfig);
-  const nativeProof = buildProof();
+  const nativeProof = buildProductionProof();
   const proof = {
     ...nativeProof,
     ...buildRegistration(nativeProof),
@@ -1792,7 +1792,7 @@ async function requestsVerifierApiUnderEncodedSeparatorBasePath() {
     verifierBaseUrl: "https://verify.argus.dev/brand%2fregion",
   };
   configure(encodedPathConfig);
-  const nativeProof = buildProof();
+  const nativeProof = buildProductionProof();
   const proof = {
     ...nativeProof,
     ...buildRegistration(nativeProof, {
@@ -3065,7 +3065,7 @@ function derivesEvidenceLevelFallbackWithoutOverclaimingAttestation() {
 
 function rendersProductionProofSummaryWithTransactionReference() {
   const { ArgusProofSummary } = loadArgusProofSummaryForTest();
-  const nativeProof = buildProof();
+  const nativeProof = buildProductionProof();
   const proof = {
     ...nativeProof,
     ...buildRegistration(nativeProof),
@@ -3075,7 +3075,7 @@ function rendersProductionProofSummaryWithTransactionReference() {
   assert.equal(isArgusProductionProof(proof), true);
   assert.match(renderedText, /Reported transaction reference/);
   assert.match(renderedText, /Evidence level/);
-  assert.match(renderedText, /Level 2 - Native capture evidence/);
+  assert.match(renderedText, /Level 3 - Keystore-signed capture/);
   assert.doesNotMatch(renderedText, /Reported Solana tx/);
   assert.doesNotMatch(renderedText, /Claimed transaction reference/);
 }
@@ -3200,7 +3200,7 @@ function rendersGenericProofSummaryOutsideMarketplaceSimulatorFallback() {
 
 function rendersMarketplaceProductionDetailsWithTransactionReference() {
   const { VerificationSnapshot } = loadMarketplaceDemoAppForTest();
-  const nativeProof = buildProof();
+  const nativeProof = buildProductionProof();
   const proof = {
     ...nativeProof,
     ...buildRegistration(nativeProof),
@@ -3211,7 +3211,7 @@ function rendersMarketplaceProductionDetailsWithTransactionReference() {
 
   assert.equal(isArgusProductionProof(proof), true);
   assert.match(renderedText, /Verified/);
-  assert.match(renderedText, /Level 2 - Native capture evidence/);
+  assert.match(renderedText, /Level 3 - Keystore-signed capture/);
   assert.match(renderedText, /Open Solana Explorer/);
   assert.doesNotMatch(renderedText, /Claimed transaction reference/);
 }
@@ -3812,6 +3812,48 @@ function buildProof(overrides = {}) {
       attestationCertificateChainPem: [],
     },
     ...overrides,
+  };
+}
+
+function buildProductionProof(overrides = {}) {
+  const baseProof = buildProof(overrides);
+  const publicKeyPem = "-----BEGIN PUBLIC KEY-----\nargus-test\n-----END PUBLIC KEY-----";
+  const deviceIntegrity = {
+    ...JSON.parse(baseProof.deviceIntegrityJson),
+    androidEvidenceLevel: 3,
+    attestationCertificateChainPem: [],
+    attestationStatus: "level_3_keystore_signature",
+    evidenceLevel: "level_3_keystore_signature",
+    hardwareAttestation: {
+      fallbackLevel: 3,
+      reason: "android_key_attestation_unavailable",
+      supported: false,
+    },
+    keystorePublicKeyPem: publicKeyPem,
+    keystoreSignature: {
+      algorithm: "SHA256withECDSA",
+      publicKeyPem,
+      signedPayloadJson: "{\"proofId\":\"argus-test\"}",
+      signatureBase64: "YXJndXMtc2ln",
+    },
+    level3KeystoreSignature: true,
+    level4HardwareAttestation: false,
+  };
+  const proof = rebindProofEvidence(baseProof, {
+    deviceIntegrityJson: stableStringify(deviceIntegrity),
+  });
+  return {
+    ...proof,
+    deviceEvidenceSummary: {
+      ...baseProof.deviceEvidenceSummary,
+      androidEvidenceLevel: 3,
+      attestationStatus: "level_3_keystore_signature",
+      evidenceLevel: "level_3_keystore_signature",
+      keystorePublicKeyPem: publicKeyPem,
+      keystoreSignature: true,
+      level3KeystoreSignature: true,
+      level4HardwareAttestation: false,
+    },
   };
 }
 

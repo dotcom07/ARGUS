@@ -436,6 +436,7 @@ function isArgusProductionProofCore(proof?: ArgusProof | null): boolean {
   return (
     isSupportedProductionProofLevel(proofLevel) &&
     hasRequiredProductionCaptureFields(proof) &&
+    hasProductionVerifiedEvidence(proof) &&
     proof.partnerIdHash === proof.proofRecord.partnerIdHash &&
     proof.proofRecord.proofId === proof.proofId &&
     proof.proofRecord.manifestHash === proof.manifestHash &&
@@ -454,6 +455,12 @@ function isArgusProductionProofCore(proof?: ArgusProof | null): boolean {
     proof.proofRecord.relayer === ARGUS_AUTHORIZED_RELAYER &&
     proof.proofRecord.relayerAuthorized === true
   );
+}
+
+// Level 2 proves a native path was used, but without a verifier-checkable key it is not a production Verified Capture.
+function hasProductionVerifiedEvidence(proof?: ArgusProof | null): boolean {
+  const evidenceLevel = getArgusEvidenceLevel(proof);
+  return evidenceLevel === "level_3_keystore_signature" || evidenceLevel === "level_4_hardware_attestation";
 }
 
 export function isArgusLocalDemoProof(proof?: ArgusProof | null): boolean {

@@ -5,6 +5,7 @@ type NativeCreateCaptureProofOptions = CreateCaptureProofOptions & {
   appIdentityHash?: string;
   captureSessionId?: string;
   sessionNonce?: string;
+  playIntegrityToken?: string;
 };
 
 type ArgusNativeModule = {

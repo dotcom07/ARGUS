@@ -143,9 +143,9 @@ This is not a fully trustless client-side verifier. The demo backend is the retr
 | Level | Meaning |
 | --- | --- |
 | Level 1 | Demo or local bundle check only. Hashes and commitments may recompute, but there is no production relayer, registry, or verifier trust root. |
-| Level 2 | Production Verified Capture: native Android CameraX capture, file/byte binding, app identity, motion evidence, session nonce, relayer validation, sponsored registration, and active Argus Registry commitment all match. |
-| Level 3 | Level 2 plus Android Keystore-signed proof binding. A non-exported app/device private key signs the proof manifest or binding message, and the verifier validates the signature, public key, and session binding. |
-| Level 4 | Level 3 plus Android Key Attestation. The verifier validates the attestation certificate chain, server challenge, leaf public-key binding, security level, and trusted root/fingerprint to confirm the key is protected by TEE or StrongBox when supported. |
+| Level 2 | Native Android capture evidence for demo/diagnostic flows. It is never eligible for a production Verified Capture badge because it has no verifier-checkable private-key signature. |
+| Level 3 | Production evidence: Level 2 plus Android Keystore-signed proof binding. A non-exported app/device private key signs the proof manifest or binding message, and the verifier validates the signature, public key, and session binding. |
+| Level 4 | Level 3 plus Android Key Attestation. The verifier validates the attestation certificate chain, server challenge, leaf public-key binding, security level, and trusted root/fingerprint to confirm the key is protected by TEE or StrongBox when supported. Unsupported Level 4 falls back to Level 3, never a production Level 2 badge. |
 
 Android Keystore is the API and key-management system; a Keystore key can be software-backed or hardware-backed. Argus treats a validated Keystore signature as Level 3. It only promotes to Level 4 when verifier policy can prove that the signing key is hardware-backed through Android Key Attestation, typically TEE or StrongBox. Level 4 strengthens device/key trust, but it is still not a camera-sensor signature and does not prove physical scene truth.
 

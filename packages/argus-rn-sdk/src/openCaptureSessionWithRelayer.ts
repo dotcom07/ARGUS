@@ -25,6 +25,9 @@ export async function openCaptureSessionWithRelayer(
     method: "POST",
     headers: {
       "content-type": "application/json",
+      ...(config.relayerAuthToken
+        ? { authorization: `Bearer ${config.relayerAuthToken}` }
+        : {}),
     },
     body: JSON.stringify({
       appIdentityHash: normalizedAppIdentityHash,
@@ -46,13 +49,40 @@ export async function openCaptureSessionWithRelayer(
   // en: The relayer session envelope is untrusted input passed into native capture; fail closed with the same length cap used by relayer/Kotlin.
   assertBoundedText("captureSessionId", session.captureSessionId, MAX_CAPTURE_SESSION_ID_BYTES);
   assertHex32("sessionNonce", session.nonce);
+  assertOptionalPositiveSafeInteger("issuedAtMs", session.issuedAtMs);
   assertOptionalPositiveSafeInteger("expiresAtMs", session.expiresAtMs);
+  assertOptionalPositiveSafeInteger("captureWindowStartMs", session.captureWindowStartMs);
+  assertOptionalPositiveSafeInteger("captureWindowEndMs", session.captureWindowEndMs);
+  if (
+    session.issuedAtMs !== undefined &&
+    session.expiresAtMs !== undefined &&
+    session.issuedAtMs >= session.expiresAtMs
+  ) {
+    throw new Error("Argus relayer capture session time envelope is invalid");
+  }
+  if (
+    session.captureWindowStartMs !== undefined &&
+    session.captureWindowEndMs !== undefined &&
+    session.captureWindowStartMs > session.captureWindowEndMs
+  ) {
+    throw new Error("Argus relayer capture session capture window is invalid");
+  }
+  if (
+    session.captureWindowEndMs !== undefined &&
+    session.expiresAtMs !== undefined &&
+    session.captureWindowEndMs > session.expiresAtMs
+  ) {
+    throw new Error("Argus relayer capture session capture window exceeds expiry");
+  }
 
   return {
     captureSessionId: session.captureSessionId,
     nonce: session.nonce.toLowerCase(),
     appIdentityHash: normalizedAppIdentityHash,
+    issuedAtMs: session.issuedAtMs,
     expiresAtMs: session.expiresAtMs,
+    captureWindowStartMs: session.captureWindowStartMs,
+    captureWindowEndMs: session.captureWindowEndMs,
   };
 }
 

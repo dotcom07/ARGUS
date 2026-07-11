@@ -12,6 +12,7 @@ import {
 } from "./requestTextPolicy.mjs";
 import { recordRegistrationProgress } from "./registrationProgress.mjs";
 import { validateAndConsumeCaptureSession } from "./sessionStore.mjs";
+import { verifyPlayIntegrityForRequest } from "./playIntegrityPolicy.mjs";
 
 const DEFAULT_REGISTRY_ADDRESS = "STmkbEWTmfBJR2mDHrbvKNjo2spT6mPU9668mw2hMaL";
 const DEFAULT_DEMO_RELAYER = "ArgusLocalDemoRelayer111111111111111111111111";
@@ -34,10 +35,11 @@ export async function registerProof(request) {
   // en: Demo mode consumes the session inside this function because this is the final registration boundary.
   // en: Solana/production keeps cheap config failures retryable, then burns the nonce once full bundle validation fails.
   const consumeSessionDuringValidation = !submitToSolana && !isProductionRuntime();
-  const { androidEvidenceDecision, manifest } = validateRegistrationRequest(normalizedRequest, {
+  const { androidEvidenceDecision, manifest } = await validateRegistrationRequest(normalizedRequest, {
     consumeSession: consumeSessionDuringValidation,
     consumeSessionOnValidationFailure: submitToSolana,
   });
+  assertProductionSolanaMode(submitToSolana);
   const relayerDeviceEvidenceSummary = buildRelayerDeviceEvidenceSummary(androidEvidenceDecision);
   if (androidEvidenceDecision.level4AttestationVerdict?.attempted) {
     const attestationRootDiagnostics = summarizeAndroidAttestationRootDiagnostics(
@@ -74,6 +76,7 @@ export async function registerProof(request) {
     relayerAcceptedEvidenceLevel: relayerDeviceEvidenceSummary?.evidenceLevel,
     trustedAttestationRootValidated:
       relayerDeviceEvidenceSummary?.trustedAttestationRootValidated,
+    playIntegrity: relayerDeviceEvidenceSummary?.playIntegrity,
     useCase: normalizedRequest.useCase,
     mode: relayerMode,
     submitToSolana,
@@ -84,7 +87,6 @@ export async function registerProof(request) {
     submitToSolana,
     useCase: normalizedRequest.useCase,
   });
-  assertProductionSolanaMode(submitToSolana);
   const verificationUrl = buildVerificationUrl(
     normalizedRequest.verifierBaseUrl,
     normalizedRequest.proofId,
@@ -217,9 +219,9 @@ function normalizeRegistrationRequest(request) {
   };
 }
 
-function validateRegistrationRequest(
+async function validateRegistrationRequest(
   request,
-  { consumeSession = true, consumeSessionOnValidationFailure = false } = {},
+  { consumeSession = true, consumeSessionOnValidationFailure = false, playIntegrityDecision } = {},
 ) {
   const requiredFields = [
     "proofId",
@@ -233,6 +235,7 @@ function validateRegistrationRequest(
     "metadataJson",
     "captureSessionId",
     "sessionNonce",
+    "captureTimestamp",
     "appIdentityHash",
     "proofLevel",
     "cameraEvidenceJson",
@@ -298,7 +301,10 @@ function validateRegistrationRequest(
 
   try {
     const manifest = verifyManifestAndProofId(request);
-    const androidEvidenceDecision = verifyManifestPolicy(request, manifest);
+    const androidEvidenceDecision = verifyManifestPolicy(request, manifest, { playIntegrityDecision });
+    androidEvidenceDecision.playIntegrity =
+      playIntegrityDecision ??
+      (await verifyPlayIntegrityForRequest(request, { enforceRequired: consumeSessionOnValidationFailure }));
     return { androidEvidenceDecision, manifest };
   } catch (error) {
     if (!consumeSession && consumeSessionOnValidationFailure) {
@@ -342,6 +348,7 @@ function consumeRegistrationSession(request) {
     nonce: request.sessionNonce,
     partnerId: request.partnerId,
     useCase: request.useCase,
+    captureTimestamp: request.captureTimestamp,
   });
 }
 
@@ -396,7 +403,7 @@ function verifyManifestAndProofId(request) {
   return manifest;
 }
 
-function verifyManifestPolicy(request, manifest) {
+function verifyManifestPolicy(request, manifest, { playIntegrityDecision } = {}) {
   if (manifest.schema_version !== MANIFEST_SCHEMA_VERSION) {
     throw new Error("manifest schema_version is not supported");
   }
@@ -454,7 +461,7 @@ function verifyManifestPolicy(request, manifest) {
   );
 
   assertEvidenceCommitment("metadataJson", request.metadataJson, manifest.metadata_commitment);
-  return enforceProofLevelPolicy(request, manifest);
+  return enforceProofLevelPolicy(request, manifest, { playIntegrityDecision });
 }
 
 function assertCaptureTimestampNotAfterRelayerClock(capturedAtMs, nowMs = Date.now()) {
@@ -480,7 +487,7 @@ function assertEvidenceCommitment(field, value, expectedHash) {
   assertCanonicalJson(field, value);
 }
 
-function enforceProofLevelPolicy(request, manifest) {
+function enforceProofLevelPolicy(request, manifest, { playIntegrityDecision } = {}) {
   const cameraEvidence = parseEvidenceJson("cameraEvidenceJson", request.cameraEvidenceJson);
   const deviceIntegrity = parseEvidenceJson("deviceIntegrityJson", request.deviceIntegrityJson);
 
@@ -531,13 +538,18 @@ function enforceProofLevelPolicy(request, manifest) {
     manifest.captured_at_ms,
     request.deviceIntegrityJson,
   );
-  return validateAndroidEvidenceLevel({ deviceIntegrity, manifest, request });
+  return validateAndroidEvidenceLevel({ deviceIntegrity, manifest, request, playIntegrityDecision });
 }
 
 function buildRelayerDeviceEvidenceSummary(androidEvidenceDecision) {
   const verdict = androidEvidenceDecision?.level4AttestationVerdict;
   if (!verdict?.attempted) {
-    return undefined;
+    return {
+      verifiedCaptureEligible: androidEvidenceDecision?.acceptedLevel >= 3,
+      ...(androidEvidenceDecision?.playIntegrity
+        ? { playIntegrity: androidEvidenceDecision.playIntegrity }
+        : {}),
+    };
   }
 
   return {
@@ -558,6 +570,8 @@ function buildRelayerDeviceEvidenceSummary(androidEvidenceDecision) {
     trustedAttestationRootValidated: verdict.trustedAttestationRootValidated === true,
     trustedAttestationRootValidationAttempted: true,
     trustedAttestationRootValidationError: verdict.failureReason,
+    verifiedCaptureEligible: verdict.acceptedLevel >= 3,
+    playIntegrity: androidEvidenceDecision.playIntegrity,
   };
 }
 

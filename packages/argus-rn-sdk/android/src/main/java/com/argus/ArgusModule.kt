@@ -127,6 +127,11 @@ class ArgusModule(private val reactContext: ReactApplicationContext) :
                     return
                 }
 
+                val playIntegrityToken = request.playIntegrityToken?.trim()?.takeIf { it.isNotEmpty() }
+                val playIntegrityTokenHash = playIntegrityToken?.let {
+                    ArgusKeystoreEvidence.sha256HexForBinding(it)
+                }
+
                 val cameraEvidenceJson = canonicalJson(cameraEvidence)
                 // kr: Keystore 서명은 검증된 native bytes와 evidence commitment를 앱 private key로 묶습니다.
                 // en: The Keystore signature binds validated native bytes and evidence commitments with an app-private key.
@@ -144,12 +149,14 @@ class ArgusModule(private val reactContext: ReactApplicationContext) :
                         sessionNonce = sessionNonce,
                         capturedAtMs = capturedAtMs,
                         imageBytes = imageBytes,
+                        playIntegrityTokenHash = playIntegrityTokenHash,
                     ),
                 )
                 val deviceEvidence = evidenceCollector.collectDeviceEvidence(
                     motionSnapshot = motionSnapshotFromCapture,
                     keystoreEvidence = keystoreEvidence,
                     appIdentityHash = appIdentityHash,
+                    playIntegrityToken = playIntegrityToken,
                 )
                 val deviceEvidenceJson = canonicalJson(deviceEvidence)
 
@@ -165,6 +172,7 @@ class ArgusModule(private val reactContext: ReactApplicationContext) :
                     sessionNonce = sessionNonce,
                     capturedAtMs = capturedAtMs,
                     imageBytes = imageBytes,
+                    playIntegrityTokenHash = playIntegrityTokenHash,
                 )
 
                 promise.resolve(proof)
@@ -210,6 +218,7 @@ class ArgusModule(private val reactContext: ReactApplicationContext) :
             val captureSessionId = optionalString(options, "captureSessionId")
             val sessionNonce = optionalString(options, "sessionNonce")
             val appIdentityHash = normalizeHashHex(optionalString(options, "appIdentityHash"))
+            val playIntegrityToken = optionalString(options, "playIntegrityToken")?.trim()?.takeIf { it.isNotEmpty() }
 
             if (partnerId.isBlank() || useCase.isBlank()) {
                 promise.reject("ARGUS_INVALID_OPTIONS", "partnerId and useCase are required")
@@ -235,6 +244,13 @@ class ArgusModule(private val reactContext: ReactApplicationContext) :
                 metadataJson,
                 ArgusProofTextPolicy.MAX_METADATA_JSON_BYTES,
             )
+            playIntegrityToken?.let {
+                ArgusProofTextPolicy.requireWithinLimit(
+                    "playIntegrityToken",
+                    it,
+                    24 * 1024,
+                )
+            }
 
             pendingPromise = promise
             pendingRequest = NativeCaptureRequest(
@@ -244,6 +260,7 @@ class ArgusModule(private val reactContext: ReactApplicationContext) :
                 captureSessionId = captureSessionId.trim(),
                 sessionNonce = sessionNonce.trim(),
                 appIdentityHash = appIdentityHash.trim(),
+                playIntegrityToken = playIntegrityToken,
             )
 
             val intent = Intent(activity, ArgusCameraActivity::class.java).apply {
@@ -402,6 +419,7 @@ class ArgusModule(private val reactContext: ReactApplicationContext) :
         val captureSessionId: String?,
         val sessionNonce: String?,
         val appIdentityHash: String?,
+        val playIntegrityToken: String?,
     )
 
     companion object {

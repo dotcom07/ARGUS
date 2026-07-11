@@ -18,7 +18,7 @@ For production `app_capture`, Argus verifies that a submitted photo:
 - Was registered under the production-pinned Argus Registry program ID and trusted registry configuration.
 - Matches an offchain proof bundle that the verifier can recompute against the registry record.
 
-Argus does not treat "an image hash exists somewhere on Solana" as verification. A production Verified Capture record requires the Argus manifest, production Argus Registry record, trusted registry configuration, authorized production relayer registration, sponsored gas/fee-payer binding, and allowlisted partner ID/use case/app identity hash.
+Argus does not treat "an image hash exists somewhere on Solana" as verification. A production Verified Capture record requires the Argus manifest, production Argus Registry record, trusted registry configuration, authorized production relayer registration, sponsored gas/fee-payer binding, allowlisted partner ID/use case/app identity hash, and Level 3 or Level 4 verifier-checkable Android signing evidence. Level 2 is native capture evidence for demo or diagnostic flows only.
 
 The current reference use case is `marketplace_listing`. The core threat is broader: an AI-generated, reused, imported, or manipulated file is presented as if it came from a fresh in-app capture.
 
@@ -56,8 +56,8 @@ Argus is also not a backend-free trustless oracle. The authorized relayer/backen
 | User asked to pay blockchain gas | Production registration is sponsored by the authorized relayer. |
 | AI detector false confidence | Product claim focuses on capture provenance, not pixel authenticity. |
 | Physical camera sensor signature overclaimed | Public docs state that Android camera evidence summaries are evidence, not a sensor signature. |
-| Level 3 or Level 4 evidence overclaimed | Level 3 requires verifier-validated Android Keystore signature and signer public key policy. Level 4 requires Android Key Attestation chain validation, leaf public-key binding, session-nonce challenge, TEE/StrongBox security level, and configured trusted attestation root/fingerprint. Unsupported or unverifiable evidence falls back to Level 3 or Level 2. |
-| Missing camera evidence, freshness timing, manifest-matching capture time, motion timing, or app signing evidence shown as verified | Production `app_capture` policy rejects missing required evidence. |
+| Level 3 or Level 4 evidence overclaimed | Level 3 requires verifier-validated Android Keystore signature and signer public key policy. Level 4 requires Android Key Attestation chain validation, leaf public-key binding, session-nonce challenge, TEE/StrongBox security level, and configured trusted attestation root/fingerprint. Unsupported or unverifiable Level 4 falls back to Level 3; Level 2 never becomes a production badge. |
+| Missing camera evidence, freshness timing, manifest-matching capture time, motion timing, or Level 3/4 app signing evidence shown as verified | Production `app_capture` policy rejects missing required evidence. |
 | Rooted, emulated, or mock-camera environment | Treat as a visible limitation; require stronger attestation policy, optional Play Integrity policy, or manual review before expanding claims. |
 | Local/mock/browser/simulator or devnet integration demo mistaken for production verification | UI must label demo states as preview unless the full production trust root is present. |
 | Attacker posts an AI image hash to a random Solana account | Verifier requires the production-pinned Argus Registry program ID and registry record schema. |
